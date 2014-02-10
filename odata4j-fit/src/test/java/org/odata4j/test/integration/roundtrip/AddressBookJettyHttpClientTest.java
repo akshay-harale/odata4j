@@ -64,7 +64,7 @@ public class AddressBookJettyHttpClientTest extends AbstractJettyHttpClientTest 
     if (format.equals(JSON))
       assertThat(exchange.getResponseContent(), containsString("\"\\/Date(-62121600000)\\/\""));
     else
-      assertThat(exchange.getResponseContent(), containsString(">1968-01-13T00:00<"));
+      assertThat(exchange.getResponseContent(), containsString(">1968-01-13T00:00:00<"));
   }
 
   private ContentExchange sendRequest(String requestUri, FormatType format) throws Exception {

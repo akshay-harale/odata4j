@@ -2,6 +2,8 @@ package org.odata4j.consumer;
 
 import org.core4j.Enumerable;
 import org.odata4j.core.EntitySetInfo;
+import org.odata4j.core.OBatchRequest;
+import org.odata4j.core.OChangeSetRequest;
 import org.odata4j.core.OCountRequest;
 import org.odata4j.core.OCreateRequest;
 import org.odata4j.core.OEntity;
@@ -11,6 +13,7 @@ import org.odata4j.core.OEntityId;
 import org.odata4j.core.OEntityKey;
 import org.odata4j.core.OEntityRequest;
 import org.odata4j.core.OFunctionRequest;
+import org.odata4j.core.OModifyLinkRequest;
 import org.odata4j.core.OModifyRequest;
 import org.odata4j.core.OObject;
 import org.odata4j.core.OQueryRequest;
@@ -18,6 +21,8 @@ import org.odata4j.core.ORelatedEntitiesLink;
 import org.odata4j.core.ORelatedEntityLink;
 import org.odata4j.edm.EdmDataServices;
 import org.odata4j.edm.EdmEntitySet;
+import org.odata4j.edm.EdmEntityType;
+import org.odata4j.edm.EdmProperty;
 import org.odata4j.exceptions.ODataProducerException;
 import org.odata4j.internal.EdmDataServicesDecorator;
 
@@ -93,15 +98,15 @@ public abstract class AbstractODataConsumer implements ODataConsumer {
     return new ConsumerQueryLinksRequest(getClient(), getServiceRootUri(), getMetadata(), sourceEntity, targetNavProp);
   }
 
-  public OEntityRequest<Void> createLink(OEntityId sourceEntity, String targetNavProp, OEntityId targetEntity) {
+  public OModifyLinkRequest createLink(OEntityId sourceEntity, String targetNavProp, OEntityId targetEntity) {
     return new ConsumerCreateLinkRequest(getClient(), getServiceRootUri(), getMetadata(), sourceEntity, targetNavProp, targetEntity);
   }
 
-  public OEntityRequest<Void> deleteLink(OEntityId sourceEntity, String targetNavProp, Object... targetKeyValues) {
+  public OModifyLinkRequest deleteLink(OEntityId sourceEntity, String targetNavProp, Object... targetKeyValues) {
     return new ConsumerDeleteLinkRequest(getClient(), getServiceRootUri(), getMetadata(), sourceEntity, targetNavProp, targetKeyValues);
   }
 
-  public OEntityRequest<Void> updateLink(OEntityId sourceEntity, OEntityId newTargetEntity, String targetNavProp, Object... oldTargetKeyValues) {
+  public OModifyLinkRequest updateLink(OEntityId sourceEntity, OEntityId newTargetEntity, String targetNavProp, Object... oldTargetKeyValues) {
     return new ConsumerUpdateLinkRequest(getClient(), getServiceRootUri(), getMetadata(), sourceEntity, newTargetEntity, targetNavProp, oldTargetKeyValues);
   }
 
@@ -149,6 +154,14 @@ public abstract class AbstractODataConsumer implements ODataConsumer {
 
   public OCountRequest getEntitiesCount(String entitySetName) {
     return new ConsumerCountRequest(getClient(), getServiceRootUri()).entitySetName(entitySetName);
+  }
+  
+  public OBatchRequest batchRequest() {
+    return new ConsumerBatchRequest(getClient(), getServiceRootUri());
+  }
+
+  public OChangeSetRequest changeSetRequest() {
+    return new ConsumerChangeSetRequest(getClient());
   }
 
   protected abstract ODataClient getClient();

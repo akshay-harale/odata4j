@@ -1,6 +1,6 @@
 package org.odata4j.format.xml;
 
-import static org.odata4j.format.xml.XmlFormatParser.NS_EDM2008_9;
+import static org.odata4j.format.xml.XmlFormatParser.NS_EDM2009_11;
 import static org.odata4j.format.xml.XmlFormatParser.NS_EDMANNOTATION;
 
 import java.io.Writer;
@@ -18,6 +18,7 @@ import org.odata4j.edm.EdmEntityContainer;
 import org.odata4j.edm.EdmEntitySet;
 import org.odata4j.edm.EdmEntityType;
 import org.odata4j.edm.EdmFunctionImport;
+import org.odata4j.edm.EdmFunctionImport.FunctionKind;
 import org.odata4j.edm.EdmFunctionParameter;
 import org.odata4j.edm.EdmItem;
 import org.odata4j.edm.EdmNavigationProperty;
@@ -43,7 +44,7 @@ public class EdmxFormatWriter extends XmlFormatWriter {
     writeExtensionNamespaces(services, writer);
 
     writer.startElement(new QName2(edmx, "DataServices", "edmx"));
-    writer.writeAttribute(new QName2(m, "DataServiceVersion", "m"), "2.0");
+    writer.writeAttribute(new QName2(m, "DataServiceVersion", "m"), "3.0");
     writer.writeNamespace("m", m);
 
     // Schema
@@ -51,7 +52,7 @@ public class EdmxFormatWriter extends XmlFormatWriter {
 
       writer.startElement(new QName2("Schema"));
       writer.writeAttribute("Namespace", schema.getNamespace());
-      writer.writeNamespace("xmlns", NS_EDM2008_9);
+      writer.writeNamespace("xmlns", NS_EDM2009_11);
       writeAnnotationAttributes(schema, writer);
       writeDocumentation(schema, writer);
 
@@ -96,6 +97,10 @@ public class EdmxFormatWriter extends XmlFormatWriter {
           writer.writeAttribute("Relationship", np.getRelationship().getFQNamespaceName());
           writer.writeAttribute("FromRole", np.getFromRole().getRole());
           writer.writeAttribute("ToRole", np.getToRole().getRole());
+          // Containment Navigation property
+          if (np.getCotainsTarget()) {
+            writer.writeAttribute("ContainsTarget", Boolean.TRUE.toString());
+          }
           writeAnnotationAttributes(np, writer);
           writeDocumentation(np, writer);
           writeAnnotationElements(np, writer);
@@ -249,7 +254,13 @@ public class EdmxFormatWriter extends XmlFormatWriter {
           if (fi.getEntitySet() != null) {
             writer.writeAttribute("EntitySet", fi.getEntitySet().getName());
           }
-          writer.writeAttribute(new QName2(m, "HttpMethod", "m"), fi.getHttpMethod());
+          if (fi.getFunctionKind().equals(FunctionKind.ServiceOperation)) {
+            writer.writeAttribute(new QName2(m, "HttpMethod", "m"), fi.getHttpMethod());
+          } else {
+            writer.writeAttribute("IsBindable", Boolean.toString(fi.isBindable()));
+            writer.writeAttribute("IsSideEffecting", Boolean.toString(fi.isSideEffecting()));
+            writer.writeAttribute(new QName2(m, "IsAlwaysBindable", "m"), Boolean.toString(fi.isAlwaysBindable()));
+          }
           writeAnnotationAttributes(fi, writer);
           writeDocumentation(fi, writer);
 
@@ -288,6 +299,8 @@ public class EdmxFormatWriter extends XmlFormatWriter {
 
     }
 
+    writer.endElement("DataServices");
+    writer.endElement("Edmx");
     writer.endDocument();
   }
 
@@ -353,7 +366,6 @@ public class EdmxFormatWriter extends XmlFormatWriter {
       if (prop.getFcNsUri() != null) {
         writer.writeAttribute(new QName2(m, "FC_NsUri", "m"), prop.getFcNsUri());
       }
-
       writeAnnotationAttributes(prop, writer);
       writeAnnotationElements(prop, writer);
       writer.endElement("Property");

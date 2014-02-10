@@ -564,9 +564,14 @@ public class ExpressionParser {
           int value = Integer.parseInt(token.value);
           return Expression.integral(value);
         } catch (NumberFormatException e) {
-          long value = Long.parseLong(token.value);
-          return Expression.int64(value);
-        }
+          try{
+        	  long value = Long.parseLong(token.value);
+        	  return Expression.int64(value);
+          }catch (NumberFormatException innerException) {
+        	  double doubleValue = Double.parseDouble(token.value);
+              return Expression.double_(doubleValue);
+          }
+        } 
       } else if (token.type == TokenType.EXPRESSION) {
         return ((ExpressionToken) token).expression;
       } else {
@@ -812,7 +817,7 @@ public class ExpressionParser {
 
   private static int readDigits(String value, int start) {
     int rt = start;
-    while (rt < value.length() && Character.isDigit(value.charAt(rt))) {
+    while (rt < value.length() && (Character.isDigit(value.charAt(rt)) ||  value.charAt(rt) == '.')) {
       rt++;
     }
     return rt;

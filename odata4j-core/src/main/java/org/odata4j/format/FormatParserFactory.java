@@ -15,8 +15,11 @@ import org.odata4j.format.json.JsonEntityFormatParser;
 import org.odata4j.format.json.JsonEntryFormatParser;
 import org.odata4j.format.json.JsonErrorFormatParser;
 import org.odata4j.format.json.JsonFeedFormatParser;
+import org.odata4j.format.json.JsonParametersFormatParser;
 import org.odata4j.format.json.JsonSimpleObjectFormatParser;
 import org.odata4j.format.json.JsonSingleLinkFormatParser;
+import org.odata4j.format.xml.AtomCollectionFormatParser;
+import org.odata4j.format.xml.AtomComplexFormatParser;
 import org.odata4j.format.xml.AtomEntryFormatParser;
 import org.odata4j.format.xml.AtomErrorFormatParser;
 import org.odata4j.format.xml.AtomFeedFormatParser;
@@ -43,6 +46,8 @@ public class FormatParserFactory {
     FormatParser<OError> getErrorFormatParser(Settings settings);
 
     FormatParser<OEntity> getEntityFormatParser(Settings settings);
+    
+    FormatParser<Parameters> getParametersFormatParser(Settings settings);
   }
 
   @SuppressWarnings("unchecked")
@@ -68,6 +73,8 @@ public class FormatParserFactory {
       return (FormatParser<T>) formatParsers.getErrorFormatParser(settings);
     } else if (OEntity.class.isAssignableFrom(targetType)) {
       return (FormatParser<T>) formatParsers.getEntityFormatParser(settings);
+    } else if (Parameters.class.isAssignableFrom(targetType)) {
+      return (FormatParser<T>) formatParsers.getParametersFormatParser(settings);
     }
     throw new IllegalArgumentException("Unable to locate format parser for " + targetType.getName() + " and format " + type);
   }
@@ -127,6 +134,11 @@ public class FormatParserFactory {
     public FormatParser<OEntity> getEntityFormatParser(Settings settings) {
       return new JsonEntityFormatParser(settings);
     }
+    
+    @Override
+    public FormatParser<Parameters> getParametersFormatParser(Settings settings) {
+      return new JsonParametersFormatParser(settings);
+    }
 
   }
 
@@ -134,12 +146,12 @@ public class FormatParserFactory {
 
     @Override
     public FormatParser<Feed> getFeedFormatParser(Settings settings) {
-      return new AtomFeedFormatParser(settings.metadata, settings.entitySetName, settings.entityKey);
+      return new AtomFeedFormatParser(settings.metadata, settings.entitySetName, settings.entityKey, settings.parseFunction);
     }
 
     @Override
     public FormatParser<Entry> getEntryFormatParser(Settings settings) {
-      return new AtomEntryFormatParser(settings.metadata, settings.entitySetName, settings.entityKey);
+      return new AtomEntryFormatParser(settings.metadata, settings.entitySetName, settings.entityKey, settings.parseFunction);
     }
 
     @Override
@@ -149,12 +161,12 @@ public class FormatParserFactory {
 
     @Override
     public FormatParser<OComplexObject> getComplexObjectFormatParser(Settings settings) {
-      throw new UnsupportedOperationException("Not supported yet.");
+      return new AtomComplexFormatParser(settings);
     }
 
     @Override
     public FormatParser<OCollection<? extends OObject>> getCollectionFormatParser(Settings settings) {
-      throw new UnsupportedOperationException("Not supported yet.");
+      return new AtomCollectionFormatParser(settings);
     }
 
     @Override
@@ -170,6 +182,11 @@ public class FormatParserFactory {
     @Override
     public FormatParser<OEntity> getEntityFormatParser(Settings settings) {
       throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public FormatParser<Parameters> getParametersFormatParser(Settings settings) {
+      throw new UnsupportedOperationException("Not supported.");
     }
 
   }

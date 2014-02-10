@@ -13,7 +13,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.SecurityContext;
@@ -178,8 +177,7 @@ public class PropertyRequestResource extends BaseResource {
 
       String entity = Long.toString(response.getCount());
 
-      // TODO remove this hack, check whether we are Version 2.0 compatible anyway
-      ODataVersion version = ODataVersion.V2;
+      ODataVersion version = ODataConstants.DATA_SERVICE_VERSION;
 
       return Response
           .ok(entity, ODataConstants.TEXT_PLAIN_CHARSET_UTF8)
@@ -233,8 +231,7 @@ public class PropertyRequestResource extends BaseResource {
 
         // TODO remove this hack, check whether we are Version 2.0 compatible anyway
         // the JsonWriter writes feed currently always as Version 2.0
-        version = MediaType.valueOf(fw.getContentType()).isCompatible(MediaType.APPLICATION_JSON_TYPE)
-            ? ODataVersion.V2 : ODataVersion.V2;
+        version = ODataConstants.DATA_SERVICE_VERSION;
       } else {
         throw new NotImplementedException("Unknown BaseResponse type: " + response.getClass().getName());
       }

@@ -2,6 +2,8 @@ package org.odata4j.jersey.consumer;
 
 import java.lang.reflect.Field;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.ws.rs.ext.RuntimeDelegate;
 
@@ -10,6 +12,7 @@ import org.odata4j.core.Throwables;
 import org.odata4j.internal.PlatformUtil;
 import org.odata4j.jersey.consumer.behaviors.JerseyClientBehavior;
 import org.odata4j.jersey.internal.StringProvider2;
+import org.odata4j.urlencoder.ConversionUtil;
 
 import com.sun.jersey.api.client.Client;
 import com.sun.jersey.api.client.WebResource;
@@ -64,7 +67,7 @@ class JerseyClientUtil {
   }
 
   public static WebResource resource(Client client, String url, OClientBehavior[] behaviors) {
-    WebResource resource = client.resource(url);
+    WebResource resource = client.resource(encodeURl(url));
     if (behaviors != null)
     {
       for (OClientBehavior behavior : behaviors)
@@ -76,5 +79,24 @@ class JerseyClientUtil {
     }
     return resource;
   }
+  
+  /**
+   * Regular expression '\\(([^)(]+|(?))+\\)' matches the string within the bracket in the URL.
+   * String in the bracket are OEntityKey which contain special character,
+   * here we are encoding the key in URL.
+   * 
+   * @param url the url
+   * @return the string
+   */
+  public static String encodeURl(String url){
+ 
+    Pattern pattern = Pattern.compile("\\(([^)(]+|(?))+\\)");
+    Matcher matcher = pattern.matcher(url);
 
+    while (matcher.find()) {
+      String st = url.substring(matcher.start(), matcher.end());
+      url = url.replace(st, ConversionUtil.encodeString(st));
+     }
+     return url;
+  }
 }

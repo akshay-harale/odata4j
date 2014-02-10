@@ -45,6 +45,10 @@ public class ODataContextImpl implements ODataContext {
       // them as their native things).  I'm not really sure of the value
       // of this...isn't odata4j intrinsically linked to javax.ws.rs already?
       // it's not like we are going to swap that out...
+      
+      if (aspect == null) {
+        return this;
+      }
 
       if (HttpHeaders.class.isAssignableFrom(aspect.getClass())) {
         impl.addContextAspect(new ODataHeadersImpl((HttpHeaders) aspect));

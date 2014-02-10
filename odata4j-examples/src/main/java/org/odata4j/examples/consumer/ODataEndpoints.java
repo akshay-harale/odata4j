@@ -4,6 +4,8 @@ public class ODataEndpoints {
   public static final String ODATA_TEST_SERVICE_READONLY = "http://services.odata.org/OData/OData.svc/";
   public static final String ODATA_TEST_SERVICE_READWRITE1 = "http://services.odata.org/(S(zltrycjws0vi03s1nktuat1s))/OData/OData.svc/";
   public static final String ODATA_TEST_SERVICE_READWRITE2 = "http://services.odata.org/(S(mvnfyllpw41mbzvkme0o0zug))/OData/OData.svc/";
+  public static final String ODATA_V3_TEST_SERVICE_READWRITE1 = "http://services.odata.org/V3/(S(ii5qwgb20wk0ptgfvvtlpwoy))/OData/OData.svc/";
+ 
   public static final String NETFLIX = "http://odata.netflix.com/Catalog/";
   public static final String ODATA_WEBSITE_DATA = "http://services.odata.org/website/odata.svc/";
   public static final String NERD_DINNER = "http://www.nerddinner.com/Services/OData.svc/";

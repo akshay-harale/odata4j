@@ -108,7 +108,8 @@ public class XmlDataProducerExample extends AbstractExample {
       marshaller.setProperty(Marshaller.JAXB_ENCODING, Charsets.Upper.UTF_8);
       marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 
-      Writer out = new OutputStreamWriter(new FileOutputStream("/META-INF/xmlDataProducerExampleTestData.xml"), Charsets.Upper.UTF_8);
+      Writer out = new OutputStreamWriter(new FileOutputStream("/META-INF/xmlDataProducerExampleTestData.xml"),
+          Charsets.Upper.UTF_8);
       try {
         List<?> res = q.getResultList();
         CustomersList c = new CustomersList();
@@ -149,15 +150,19 @@ public class XmlDataProducerExample extends AbstractExample {
       properties.add(EdmProperty.newBuilder("postalCode").setType(EdmSimpleType.STRING));
 
       List<EdmEntityType.Builder> entityTypes = new ArrayList<EdmEntityType.Builder>();
-      EdmEntityType.Builder type = EdmEntityType.newBuilder().setNamespace(namespace).setName("Customers").addKeys("customerID").addProperties(properties);
+      EdmEntityType.Builder type = EdmEntityType.newBuilder().setNamespace(namespace).setName("Customers")
+          .addKeys("customerID").addProperties(properties);
       entityTypes.add(type);
 
       List<EdmEntitySet.Builder> entitySets = new ArrayList<EdmEntitySet.Builder>();
       entitySets.add(EdmEntitySet.newBuilder().setName("Customers").setEntityType(type));
 
-      EdmEntityContainer.Builder container = EdmEntityContainer.newBuilder().setName(namespace + "Entities").setIsDefault(true).addEntitySets(entitySets);
-      EdmSchema.Builder modelSchema = EdmSchema.newBuilder().setNamespace(namespace + "Model").addEntityTypes(entityTypes);
-      EdmSchema.Builder containerSchema = EdmSchema.newBuilder().setNamespace(namespace + "Container").addEntityContainers(container);
+      EdmEntityContainer.Builder container = EdmEntityContainer.newBuilder().setName(namespace + "Entities")
+          .setIsDefault(true).addEntitySets(entitySets);
+      EdmSchema.Builder modelSchema = EdmSchema.newBuilder().setNamespace(namespace + "Model")
+          .addEntityTypes(entityTypes);
+      EdmSchema.Builder containerSchema = EdmSchema.newBuilder().setNamespace(namespace + "Container")
+          .addEntityContainers(container);
 
       metadata = EdmDataServices.newBuilder().addSchemas(containerSchema, modelSchema).build();
 
@@ -170,10 +175,9 @@ public class XmlDataProducerExample extends AbstractExample {
     }
 
     /**
-     * Returns OEntities build from xml data. In the real world the xml data
-     * could be filtered using the provided <code>queryInfo.filter</code>.
-     * The real implementation should also respect
-     * <code>queryInfo.top</code> and <code>queryInfo.skip</code>.
+     * Returns OEntities build from xml data. In the real world the xml data could be filtered using the provided
+     * <code>queryInfo.filter</code>. The real implementation should also respect <code>queryInfo.top</code> and
+     * <code>queryInfo.skip</code>.
      */
     @Override
     public EntitiesResponse getEntities(ODataContext context, String entitySetName, QueryInfo queryInfo) {
@@ -220,7 +224,8 @@ public class XmlDataProducerExample extends AbstractExample {
         throw Throwables.propagate(ex);
       } finally {
         try {
-          if (reader != null) reader.close();
+          if (reader != null)
+            reader.close();
         } catch (XMLStreamException ignore) {}
 
         try {
@@ -235,12 +240,14 @@ public class XmlDataProducerExample extends AbstractExample {
     }
 
     @Override
-    public EntitiesResponse getNavProperty(ODataContext context, String entitySetName, OEntityKey entityKey, String navProp, QueryInfo queryInfo) {
+    public EntitiesResponse getNavProperty(ODataContext context, String entitySetName, OEntityKey entityKey,
+        String navProp, QueryInfo queryInfo) {
       throw new NotImplementedException();
     }
 
     @Override
-    public CountResponse getNavPropertyCount(ODataContext context, String entitySetName, OEntityKey entityKey, String navProp, QueryInfo queryInfo) {
+    public CountResponse getNavPropertyCount(ODataContext context, String entitySetName, OEntityKey entityKey,
+        String navProp, QueryInfo queryInfo) {
       throw new NotImplementedException();
     }
 
@@ -253,7 +260,8 @@ public class XmlDataProducerExample extends AbstractExample {
     }
 
     @Override
-    public EntityResponse createEntity(ODataContext context, String entitySetName, OEntityKey entityKey, String navProp, OEntity entity) {
+    public EntityResponse createEntity(ODataContext context, String entitySetName, OEntityKey entityKey,
+        String navProp, OEntity entity) {
       throw new NotImplementedException();
     }
 
@@ -273,7 +281,8 @@ public class XmlDataProducerExample extends AbstractExample {
     }
 
     @Override
-    public EntityResponse getEntity(ODataContext context, String entitySetName, OEntityKey entityKey, EntityQueryInfo queryInfo) {
+    public EntityResponse getEntity(ODataContext context, String entitySetName, OEntityKey entityKey,
+        EntityQueryInfo queryInfo) {
       throw new NotImplementedException();
     }
 
@@ -283,22 +292,26 @@ public class XmlDataProducerExample extends AbstractExample {
     }
 
     @Override
-    public void createLink(ODataContext context, OEntityId sourceEntity, String targetNavProp, OEntityId targetEntity) {
+    public void createLink(ODataContext context, OEntityId sourceEntity, String targetNavProp,
+        OEntityId targetEntity) {
       throw new NotImplementedException();
     }
 
     @Override
-    public void updateLink(ODataContext context, OEntityId sourceEntity, String targetNavProp, OEntityKey oldTargetEntityKey, OEntityId newTargetEntity) {
+    public void updateLink(ODataContext context, OEntityId sourceEntity, String targetNavProp,
+        OEntityKey oldTargetEntityKey, OEntityId newTargetEntity) {
       throw new NotImplementedException();
     }
 
     @Override
-    public void deleteLink(ODataContext context, OEntityId sourceEntity, String targetNavProp, OEntityKey targetEntityKey) {
+    public void deleteLink(ODataContext context, OEntityId sourceEntity, String targetNavProp,
+        OEntityKey targetEntityKey) {
       throw new NotImplementedException();
     }
 
     @Override
-    public BaseResponse callFunction(ODataContext context, EdmFunctionImport name, Map<String, OFunctionParameter> params, QueryInfo queryInfo) {
+    public BaseResponse callFunction(ODataContext context, EdmFunctionImport name,
+        Map<String, OFunctionParameter> params, QueryInfo queryInfo) {
       throw new NotImplementedException();
     }
 
@@ -310,6 +323,36 @@ public class XmlDataProducerExample extends AbstractExample {
     @Override
     public <TExtension extends OExtension<ODataProducer>> TExtension findExtension(Class<TExtension> clazz) {
       return null;
+    }
+
+    @Override
+    public void beginChangeSetBoundary() {
+      throw new NotImplementedException("ChangeSets not supported for " + this.getClass().getName());
+    }
+
+    @Override
+    public void commitChangeSetBoundary() {
+      throw new NotImplementedException("ChangeSets not supported for " + this.getClass().getName());
+    }
+
+    @Override
+    public void rollbackChangeSetBoundary() {
+      throw new NotImplementedException("ChangeSets not supported for " + this.getClass().getName());
+    }
+
+    @Override
+    public EntityResponse createResponseForBatchPostOperation(String entitySetName, OEntity entity) {
+      throw new NotImplementedException("create Response For Batch Post Operation not supported for " + this.getClass().getName());
+    }
+
+    @Override
+    public InputStream getInputStreamForMediaLink(String entitySetName, OEntityKey entityKey, EntityQueryInfo queryInfo) {
+      throw new NotImplementedException("Streaming is not supported for " + this.getClass().getName());
+    }
+
+    @Override
+    public void updateEntityWithStream(String entitySetName, OEntity entity) {
+      throw new NotImplementedException("Updation of Stream not supported for " + this.getClass().getName());
     }
 
   }

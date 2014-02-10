@@ -16,6 +16,7 @@ import org.odata4j.format.Entry;
 import org.odata4j.format.Feed;
 import org.odata4j.format.FormatParser;
 import org.odata4j.format.FormatParserFactory;
+import org.odata4j.format.FormatType;
 import org.odata4j.format.Settings;
 import org.odata4j.internal.InternalUtil;
 
@@ -34,27 +35,13 @@ public class ConsumerQueryEntitiesRequest<T> extends AbstractConsumerQueryReques
   @Override
   public Enumerable<T> execute() throws ODataProducerException {
     ODataClientRequest request = buildRequest(null);
-    Enumerable<Entry> entries = getEntries(request);
-
-    return entries.select(new Func1<Entry, T>() {
-      public T apply(Entry input) {
-        return InternalUtil.toEntity(entityType, input.getEntity());
-      }
-    }).cast(entityType);
-  }
-
-  private Enumerable<Entry> getEntries(final ODataClientRequest request) throws ODataProducerException {
-    final Feed feed = doRequest(request);
-    return Enumerable.createFromIterator(new Func<Iterator<Entry>>() {
-      public Iterator<Entry> apply() {
-        return new EntryIterator(request, feed);
-      }
-    });
-  }
-
-  private Feed doRequest(ODataClientRequest request) throws ODataProducerException {
     ODataClientResponse response = getClient().getEntities(request);
+    final Feed feed = doRequest(response);
 
+    return getResult(feed);
+  }
+
+  private Feed doRequest(ODataClientResponse response) throws ODataProducerException {
     ODataVersion version = InternalUtil.getDataServiceVersion(response.getHeaders()
         .getFirst(ODataConstants.Headers.DATA_SERVICE_VERSION));
 
@@ -84,7 +71,8 @@ public class ConsumerQueryEntitiesRequest<T> extends AbstractConsumerQueryReques
     protected IterationResult<Entry> advance() throws Exception {
 
       if (feed == null) {
-        feed = doRequest(request);
+        ODataClientResponse response = getClient().getEntities(request);
+        feed = doRequest(response);
         feedEntries = feed.getEntries().iterator();
         feedEntryCount = 0;
       }
@@ -129,6 +117,40 @@ public class ConsumerQueryEntitiesRequest<T> extends AbstractConsumerQueryReques
       return advance(); // TODO stackoverflow possible here
     }
 
+  }
+
+  private ODataClientRequest getRequest() {
+    return buildRequest(null);
+  }
+
+  private Enumerable<T> getResult(final Feed feed) {
+    Enumerable<Entry> entries = Enumerable.createFromIterator(new Func<Iterator<Entry>>() {
+      public Iterator<Entry> apply() {
+        return new EntryIterator(buildRequest(null), feed);
+      }
+    });
+
+    return entries.select(new Func1<Entry, T>() {
+      public T apply(Entry input) {
+        return InternalUtil.toEntity(entityType, input.getEntity());
+      }
+    }).cast(entityType);
+  }
+
+  @Override
+  public String formatRequest(FormatType formatType) {
+    ODataClientRequest request = getRequest();
+    return ConsumerBatchRequestHelper.formatSingleRequest(request, formatType);
+  }
+
+  @Override
+  public Object getResult(ODataVersion version, Object payload, FormatType formatType) {
+    FormatParser<Feed> parser = FormatParserFactory.getParser(Feed.class, formatType,
+        new Settings(version, getMetadata(), getEntitySet().getName(), null));
+
+    Feed feed = parser.parse(getClient().getFeedReader((String) payload));
+
+    return getResult(feed);
   }
 
 }

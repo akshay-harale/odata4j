@@ -1,5 +1,6 @@
 package org.odata4j.producer.inmemory;
 
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -1125,4 +1126,35 @@ public class InMemoryProducer implements ODataProducer {
     fireUnmarshalEvent(pojo, entity, TriggerType.After);
     return pojo;
   }
+
+  @Override
+  public void beginChangeSetBoundary() {
+    throw new NotImplementedException("ChangeSets not supported for " + this.getClass().getName());
+  }
+
+  @Override
+  public void commitChangeSetBoundary() {
+    throw new NotImplementedException("ChangeSets not supported for " + this.getClass().getName());
+  }
+
+  @Override
+  public void rollbackChangeSetBoundary() {
+    throw new NotImplementedException("ChangeSets not supported for " + this.getClass().getName());
+  }
+
+  @Override
+  public EntityResponse createResponseForBatchPostOperation(String entitySetName, OEntity entity) {
+    throw new NotImplementedException("create Response For Batch Post Operation not supported for " + this.getClass().getName());
+  }
+
+  @Override
+  public InputStream getInputStreamForMediaLink(String entitySetName, OEntityKey entityKey, EntityQueryInfo queryInfo) {
+    throw new NotImplementedException("Streaming is not supported for " + this.getClass().getName());
+  }
+
+  @Override
+  public void updateEntityWithStream(String entitySetName, OEntity entity) {
+    throw new NotImplementedException("Updation of Stream not supported for " + this.getClass().getName());
+  }
+
 }

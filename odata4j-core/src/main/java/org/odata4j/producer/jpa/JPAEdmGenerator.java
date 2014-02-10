@@ -4,6 +4,7 @@ import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
+import java.sql.Blob;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -26,8 +27,10 @@ import javax.persistence.metamodel.SingularAttribute;
 import javax.persistence.metamodel.Type;
 import javax.persistence.metamodel.Type.PersistenceType;
 
+import org.core4j.CoreUtils;
 import org.core4j.Enumerable;
 import org.core4j.Predicate1;
+import org.eclipse.persistence.mappings.DatabaseMapping;
 import org.odata4j.core.OFuncs;
 import org.odata4j.core.OPredicates;
 import org.odata4j.edm.EdmAssociation;
@@ -129,6 +132,8 @@ public class JPAEdmGenerator implements EdmGenerator {
 
       EdmEntityType.Builder eet = EdmEntityType.newBuilder().setNamespace(modelNamespace).setName(name).addKeys(keys).addProperties(properties).addNavigationProperties(navigationProperties);
       edmEntityTypes.add(eet);
+
+      checkIfEntityHasStream(properties, eet);
 
       EdmEntitySet.Builder ees = EdmEntitySet.newBuilder().setName(name).setEntityType(eet);
       entitySets.add(ees);
@@ -232,7 +237,7 @@ public class JPAEdmGenerator implements EdmGenerator {
 
     }
 
-    EdmEntityContainer.Builder container = EdmEntityContainer.newBuilder().setName(getEntityContainerName()).setIsDefault(true).addEntitySets(entitySets).addAssociationSets(associationSets);
+    EdmEntityContainer.Builder container = EdmEntityContainer.newBuilder().setName(getEntityContainerName()).setIsDefault(true).setLazyLoadingEnabled(Boolean.TRUE).addEntitySets(entitySets).addAssociationSets(associationSets);
 
     EdmSchema.Builder modelSchema = EdmSchema.newBuilder().setNamespace(modelNamespace).addEntityTypes(edmEntityTypes).addComplexTypes(edmComplexTypes).addAssociations(associations);
     EdmSchema.Builder containerSchema = EdmSchema.newBuilder().setNamespace(getContainerSchemaNamespace()).addEntityContainers(container);
@@ -240,14 +245,33 @@ public class JPAEdmGenerator implements EdmGenerator {
     return EdmDataServices.newBuilder().addSchemas(containerSchema, modelSchema);
   }
 
+  private void checkIfEntityHasStream(List<EdmProperty.Builder> properties, EdmEntityType.Builder eet) {
+    boolean hasStream = false;
+    for (EdmProperty.Builder propertyBuilder : properties) {
+      if (propertyBuilder.getType().equals(EdmSimpleType.STREAM)) {
+        hasStream = true;
+        break;
+      }
+    }
+    eet.setHasStream(hasStream);
+  }
+
   protected EdmSimpleType<?> toEdmType(SingularAttribute<?, ?> sa) {
     Class<?> javaType = sa.getType().getJavaType();
+    DatabaseMapping mapping = CoreUtils.getFieldValue(sa, "mapping",
+        DatabaseMapping.class);
 
     EdmSimpleType<?> type = EdmSimpleType.forJavaType(javaType);
     if (type == EdmSimpleType.DATETIME) {
       TemporalType temporal = getTemporalType(sa);
       if (temporal != null && temporal == TemporalType.TIME)
         type = EdmSimpleType.TIME;
+    }
+
+    if (mapping.isLazy() && mapping.getField().getTypeName().equalsIgnoreCase(Blob.class.getName())) {
+      return EdmSimpleType.STREAM;
+    } else if (javaType.equals(java.sql.Blob.class) || type.equals(EdmSimpleType.STREAM)) {
+      return EdmSimpleType.BINARY;
     }
 
     if (type != null)
@@ -295,7 +319,6 @@ public class JPAEdmGenerator implements EdmGenerator {
 
       if (att.isCollection()) {} else {
         SingularAttribute<?, ?> sa = (SingularAttribute<?, ?>) att;
-
         Type<?> type = sa.getType();
         // Do we have an embedded composite key here? If so, we have to flatten the @EmbeddedId since
         // only any set of non-nullable, immutable, <EDMSimpleType> declared properties MAY serve as the key.

@@ -9,6 +9,8 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
+import java.util.List;
+
 
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
@@ -39,6 +41,7 @@ import org.odata4j.consumer.ODataClientRequest;
 import org.odata4j.consumer.ODataClientResponse;
 import org.odata4j.consumer.behaviors.OClientBehavior;
 import org.odata4j.consumer.behaviors.OClientBehaviors;
+import org.odata4j.consumer.ODataClientBatchResponse;
 import org.odata4j.core.ODataConstants;
 import org.odata4j.core.ODataConstants.Charsets;
 import org.odata4j.core.ODataHttpMethod;
@@ -51,6 +54,7 @@ import org.odata4j.format.FormatParserFactory;
 import org.odata4j.format.FormatType;
 import org.odata4j.format.FormatWriter;
 import org.odata4j.format.FormatWriterFactory;
+import org.odata4j.format.Parameters;
 import org.odata4j.format.SingleLink;
 import org.odata4j.internal.BOMWorkaroundReader;
 import org.odata4j.stax2.XMLEventReader2;
@@ -136,6 +140,8 @@ public class ODataCxfClient extends AbstractODataClient {
         payloadClass = Entry.class;
       else if (request.getPayload() instanceof SingleLink)
         payloadClass = SingleLink.class;
+      else if (request.getPayload() instanceof Parameters)
+        payloadClass = Parameters.class;
       else
         throw new IllegalArgumentException("Unsupported payload: " + request.getPayload());
 
@@ -251,5 +257,14 @@ public class ODataCxfClient extends AbstractODataClient {
       Throwables.propagate(e);
       return null;
     }
+  }
+  
+  public Reader getFeedReader(String textEntity) {
+	  throw new UnsupportedOperationException("not supported by ODataCxfClient");
+  }
+  
+  @Override
+  public List<ODataClientBatchResponse> batchRequest(FormatType reqType1, ODataClientRequest batchRequest, List<?> childRequests) {
+	  throw new UnsupportedOperationException("not supported by ODataCxfClient");
   }
 }

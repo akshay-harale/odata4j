@@ -7,13 +7,13 @@ import java.util.List;
 import org.odata4j.core.OCollection;
 import org.odata4j.core.OComplexObject;
 import org.odata4j.core.OComplexObjects;
-import org.odata4j.core.ODataVersion;
 import org.odata4j.core.OObject;
 import org.odata4j.core.OProperties;
 import org.odata4j.core.OProperty;
 import org.odata4j.edm.EdmCollectionType;
 import org.odata4j.edm.EdmComplexType;
 import org.odata4j.edm.EdmProperty;
+import org.odata4j.edm.EdmProperty.CollectionKind;
 import org.odata4j.edm.EdmSimpleType;
 import org.odata4j.format.FormatParser;
 import org.odata4j.format.Settings;
@@ -44,6 +44,11 @@ public class JsonComplexObjectFormatParser extends JsonFormatParser implements F
 
   private EdmComplexType returnType = null;
 
+  /*
+   *the response for a complex type object in VJson format is like:
+   * {"d":{"Address":{"__metadata":{"type":"ODataDemo.Address"},"Street":"NE 228th","City":"Sammamish","State":"WA","ZipCode":"98074","Country":"USA"}}} 
+   */
+
   @Override
   public OComplexObject parse(Reader reader) {
     JsonStreamReader jsr = JsonStreamReaderFactory.createJsonStreamReader(reader);
@@ -65,14 +70,6 @@ public class JsonComplexObjectFormatParser extends JsonFormatParser implements F
         // "function" property
         ensureNext(jsr);
         ensureStartProperty(jsr.nextEvent());
-
-        // "aresult" for DataServiceVersion > 1.0
-        if (version.compareTo(ODataVersion.V1) > 0) {
-          ensureNext(jsr);
-          ensureStartObject(jsr.nextEvent());
-          ensureNext(jsr);
-          ensureStartProperty(jsr.nextEvent(), RESULTS_PROPERTY);
-        }
       }
 
       // parse the entry, should start with startObject
@@ -84,12 +81,6 @@ public class JsonComplexObjectFormatParser extends JsonFormatParser implements F
         ensureNext(jsr);
         ensureEndProperty(jsr.nextEvent());
 
-        if (version.compareTo(ODataVersion.V1) > 0) {
-          ensureNext(jsr);
-          ensureEndObject(jsr.nextEvent());
-          ensureNext(jsr);
-          ensureEndProperty(jsr.nextEvent()); // "results"
-        }
         ensureNext(jsr);
         ensureEndObject(jsr.nextEvent()); // the response object
       }
@@ -127,12 +118,45 @@ public class JsonComplexObjectFormatParser extends JsonFormatParser implements F
     addProperty(props, startPropertyEvent.asStartProperty().getName(), jsr);
     return eatProps(props, jsr);
   }
+  
+  /**
+   * this method will skip the __metada part of a complex type instance as the verbose JSON object.
+   * for the complext type double x, int y, string remark}, the .net entityCTInVJson is like:
+   * {"__metadata":{"type":"UNITSContainer.testCType"},"remark":"test return complex type","x":1,"y":10}
+   * @param jsr
+   * @return
+   */
+  private JsonEvent skipVJson(JsonStreamReader jsr) {
+    JsonEvent event = jsr.nextEvent();
+    ensureStartObject(event); //StartObject('{')
+    
+    event = jsr.nextEvent();
+    ensureStartProperty(event, "type"); //StartProperty(type)
+    
+    event = jsr.nextEvent();
+    ensureEndProperty(event); //EndProperty(UNITSContainer.testCType)
+    String complexTypeName = event.asEndProperty().getValue();
+    
+    event = jsr.nextEvent();
+    ensureEndObject(event); //EndObject('}')
+    
+    event = jsr.nextEvent();
+    if (event.isEndProperty()) {
+      event = jsr.nextEvent();
+    }
+
+    return event;
+  }
 
   private OComplexObject eatProps(List<OProperty<?>> props, JsonStreamReader jsr) {
     dump("json eatProps: " + returnType.getFullyQualifiedTypeName());
     ensureNext(jsr);
     while (jsr.hasNext()) {
       JsonEvent event = jsr.nextEvent();
+      
+      if (event.isStartProperty() && event.asStartProperty().getName().equals(JsonFormatParser.METADATA_PROPERTY)) {
+        event = skipVJson(jsr);
+      }
 
       if (event.isStartProperty()) {
         addProperty(props, event.asStartProperty().getName(), jsr);
@@ -187,13 +211,28 @@ public class JsonComplexObjectFormatParser extends JsonFormatParser implements F
     ensureStartProperty(event);
     JsonStartPropertyEvent startProp = event.asStartProperty();
     EdmProperty eprop = this.returnType.findProperty(propName);
-
+    
+    if (startProp.getName().equals(JsonFormatParser.METADATA_PROPERTY)) {
+      event = skipVJson(jsr);
+      ensureStartProperty(event);
+      startProp = event.asStartProperty();
+    }
+    
     if (RESULTS_PROPERTY.equals(startProp.getName())) {
       // embedded collection
 
       dump("json embeddedCollection" + (eprop != null ? eprop.getName() : "null"));
-      if (eprop != null && eprop.getCollectionKind() != EdmProperty.CollectionKind.NONE) {
-        EdmCollectionType collectionType = new EdmCollectionType(eprop.getCollectionKind(), eprop.getType());
+      if (eprop != null) {
+        EdmCollectionType collectionType = null;
+        // for some reason, the odata4j will define collection property as: (not in spec)
+        // <Property CollectionKind="Collection" Name="EmbeddedCollectionString" Nullable="true" Type="Edm.String" />
+        // which will cause the getType() return the element type, not the collection type.
+        if (eprop.getCollectionKind() != null && eprop.getCollectionKind() != CollectionKind.NONE) {
+          collectionType = new EdmCollectionType(eprop.getCollectionKind(), eprop.getType());
+        } else {
+          // handle collection property is defined as Collection(type)
+          collectionType = (EdmCollectionType) eprop.getType();
+        }
         JsonCollectionFormatParser cfp = new JsonCollectionFormatParser(collectionType, this.metadata);
         OCollection<? extends OObject> collection = cfp.parseCollection(jsr);
         ensureEndArray(jsr.previousEvent());
