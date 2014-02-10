@@ -112,6 +112,18 @@
       <version>${xmlunit.version}</version>
       <scope>test</scope>
     </dependency>
+	<dependency>
+		<groupId>stax</groupId>
+		<artifactId>stax</artifactId>
+		<version>1.2.0</version>
+		<scope>test</scope>
+		<exclusions>
+			<exclusion>
+				<groupId>stax</groupId>
+				<artifactId>stax-api</artifactId>
+			</exclusion>
+		</exclusions>
+	</dependency>    
   </dependencies>
 
 </project>

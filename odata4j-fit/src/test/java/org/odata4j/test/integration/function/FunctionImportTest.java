@@ -937,26 +937,4 @@ public class FunctionImportTest extends AbstractRuntimeTest {
       assertEquals(format.toString(), 404, responseData.getStatusCode());
     }
   }
-
-  @Test
-  public void testBatch() throws XpathException, IOException, SAXException {
-
-    /*
-     * because of we don't have batch processing test we will to a sanity batch test here because of function call support
-     * for all http methods did affect batch implementation (s. EntietiesRequestResource). 
-     */
-
-    for (FormatType format : FunctionImportTest.formats) {
-      String uri = endpointUri + MetadataUtil.TEST_FUNCTION_RETURN_STRING_POST + "/$batch" + "?" + this.formatQuery(format);
-
-      Hashtable<String, Object> header = new Hashtable<String, Object>();
-      header.put("content-type", new MediaType("multipart", "mixed"));
-      ResponseData responseData = this.rtFacade.postWebResource(uri, null, null, header);
-      String resource = responseData.getEntity();
-
-      assertNotNull(resource);
-      assertTrue(resource.contains("batchresponse"));
-      assertEquals(format.toString(), 202, responseData.getStatusCode());
-    }
-  }
 }

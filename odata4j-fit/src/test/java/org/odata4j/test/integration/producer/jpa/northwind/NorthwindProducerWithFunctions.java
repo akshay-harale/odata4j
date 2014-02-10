@@ -1,5 +1,6 @@
 package org.odata4j.test.integration.producer.jpa.northwind;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -7,6 +8,8 @@ import org.odata4j.core.OCollection;
 import org.odata4j.core.OCollections;
 import org.odata4j.core.OComplexObject;
 import org.odata4j.core.OComplexObjects;
+import org.odata4j.core.OEntity;
+import org.odata4j.core.OEntityKey;
 import org.odata4j.core.OFunctionParameter;
 import org.odata4j.core.OProperties;
 import org.odata4j.core.OProperty;
@@ -20,7 +23,9 @@ import org.odata4j.edm.EdmFunctionParameter;
 import org.odata4j.edm.EdmProperty.CollectionKind;
 import org.odata4j.edm.EdmSchema;
 import org.odata4j.edm.EdmSimpleType;
+import org.odata4j.exceptions.NotImplementedException;
 import org.odata4j.producer.BaseResponse;
+import org.odata4j.producer.EntityQueryInfo;
 import org.odata4j.producer.ODataContext;
 import org.odata4j.producer.ODataProducer;
 import org.odata4j.producer.ODataProducerDelegate;
@@ -151,6 +156,16 @@ public class NorthwindProducerWithFunctions extends ODataProducerDelegate {
     container.addFunctionImports(testFunction3);
 
     return ds.build();
+  }
+
+  @Override
+  public InputStream getInputStreamForMediaLink(String entitySetName, OEntityKey entityKey, EntityQueryInfo queryInfo) {
+    throw new NotImplementedException("Streaming is not supported for " + this.getClass().getName());
+  }
+
+  @Override
+  public void updateEntityWithStream(String entitySetName, OEntity entity) {
+    throw new NotImplementedException("Updation of Stream not supported for " + this.getClass().getName());
   }
 
 }

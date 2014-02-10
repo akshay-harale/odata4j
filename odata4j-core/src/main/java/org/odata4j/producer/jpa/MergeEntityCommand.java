@@ -4,6 +4,7 @@ import javax.persistence.EntityManager;
 import javax.persistence.metamodel.EntityType;
 
 import org.odata4j.core.OEntity;
+import org.odata4j.util.OdataHelper;
 
 public class MergeEntityCommand implements Command {
 
@@ -14,10 +15,10 @@ public class MergeEntityCommand implements Command {
         .getJPAEntityType();
     Object jpaEntity = context.getEntity().getJpaEntity();
     OEntity entity = context.getEntity().getOEntity();
-
-    JPAProducer.applyOProperties(em, jpaEntityType,
-        entity.getProperties(),
-        jpaEntity);
+    // add properties other than Stream and Primary Keys 
+    OdataHelper.applyOPropertiesExcludingPrimaryKeys(jpaEntityType, entity.getProperties(),
+        jpaEntity, context.getMetadata());
+    em.merge(jpaEntity);
     JPAProducer.applyOLinks(em, jpaEntityType, entity.getLinks(),
         jpaEntity);
 

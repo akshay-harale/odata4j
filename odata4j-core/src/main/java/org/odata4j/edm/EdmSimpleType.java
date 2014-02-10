@@ -1,6 +1,7 @@
 package org.odata4j.edm;
 
 import java.math.BigDecimal;
+import java.sql.Blob;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.Calendar;
@@ -9,6 +10,8 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+
+import javax.sql.rowset.serial.SerialBlob;
 
 import org.core4j.Enumerable;
 import org.joda.time.DateTime;
@@ -30,6 +33,7 @@ public class EdmSimpleType<V> extends EdmType {
 
   // http://msdn.microsoft.com/en-us/library/bb399213.aspx
   public static final EdmSimpleType<byte[]> BINARY = newSimple("Edm.Binary", byte[].class, Byte[].class);
+  public static final EdmSimpleType<Blob> STREAM = newSimple("Edm.Stream", Blob.class, Blob.class, SerialBlob.class);
   public static final EdmSimpleType<Boolean> BOOLEAN = newSimple("Edm.Boolean", Boolean.class, boolean.class);
   public static final EdmSimpleType<UnsignedByte> BYTE = newSimple("Edm.Byte", UnsignedByte.class);
   public static final EdmSimpleType<LocalDateTime> DATETIME = newSimple("Edm.DateTime", LocalDateTime.class, Instant.class, Date.class, Calendar.class, Timestamp.class, java.sql.Date.class); // possible, but not default: Time.class

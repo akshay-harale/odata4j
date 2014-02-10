@@ -5,11 +5,13 @@ import java.util.List;
 import javax.ws.rs.core.MediaType;
 
 import org.odata4j.edm.EdmDataServices;
+import org.odata4j.exceptions.NotImplementedException;
 import org.odata4j.format.json.JsonCollectionFormatWriter;
 import org.odata4j.format.json.JsonComplexObjectFormatWriter;
 import org.odata4j.format.json.JsonEntryFormatWriter;
 import org.odata4j.format.json.JsonErrorFormatWriter;
 import org.odata4j.format.json.JsonFeedFormatWriter;
+import org.odata4j.format.json.JsonParametersFormatWriter;
 import org.odata4j.format.json.JsonPropertyFormatWriter;
 import org.odata4j.format.json.JsonRequestEntryFormatWriter;
 import org.odata4j.format.json.JsonServiceDocumentFormatWriter;
@@ -51,6 +53,8 @@ public class FormatWriterFactory {
 
     FormatWriter<Entry> getRequestEntryFormatWriter();
 
+    FormatWriter<Parameters> getRequestParametersFormatWriter();
+
     FormatWriter<SingleLink> getSingleLinkFormatWriter();
 
     FormatWriter<SingleLinks> getSingleLinksFormatWriter();
@@ -84,6 +88,11 @@ public class FormatWriterFactory {
     // else default to atom
     if (type == null)
       type = FormatType.ATOM;
+    
+    // According spec, the function calls must use JSON
+    if (targetType.equals(Parameters.class)){
+      type = FormatType.JSON;
+    }
 
     FormatWriters formatWriters = type.equals(FormatType.JSON) ? new JsonWriters(callback) : new AtomWriters();
 
@@ -119,6 +128,9 @@ public class FormatWriterFactory {
 
     if (targetType.equals(ErrorResponse.class))
       return (FormatWriter<T>) formatWriters.getErrorFormatWriter();
+    
+    if (targetType.equals(Parameters.class))
+      return (FormatWriter<T>) formatWriters.getRequestParametersFormatWriter();
 
     throw new IllegalArgumentException("Unable to locate format writer for " + targetType.getName() + " and format " + type);
 
@@ -191,6 +203,11 @@ public class FormatWriterFactory {
     public FormatWriter<ErrorResponse> getErrorFormatWriter() {
       return new JsonErrorFormatWriter(callback);
     }
+
+    @Override
+    public FormatWriter<Parameters> getRequestParametersFormatWriter() {
+      return new JsonParametersFormatWriter(callback);
+    }   
   }
 
   public static class AtomWriters implements FormatWriters {
@@ -248,6 +265,11 @@ public class FormatWriterFactory {
     @Override
     public FormatWriter<ErrorResponse> getErrorFormatWriter() {
       return new AtomErrorFormatWriter();
+    }
+
+    @Override
+    public FormatWriter<Parameters> getRequestParametersFormatWriter() {
+      throw new NotImplementedException("The ATOM format for function payload is not implemented");
     }
   }
 

@@ -1,7 +1,11 @@
 package org.odata4j.test.integration.producer.jpa.northwind;
 
+import java.io.InputStream;
+
+import org.odata4j.core.OEntity;
 import org.odata4j.core.OEntityId;
 import org.odata4j.core.OEntityKey;
+import org.odata4j.producer.EntityQueryInfo;
 import org.odata4j.producer.ODataContext;
 import org.odata4j.producer.ODataProducer;
 import org.odata4j.producer.ODataProducerDelegate;
@@ -55,5 +59,17 @@ public class InterceptLinkModificationCalls extends ODataProducerDelegate {
   @Override
   public void deleteLink(ODataContext context, OEntityId sourceEntity, String targetNavProp, OEntityKey targetEntityKey) {
     lastCall = new LinksProducerCall(LinksMethod.DELETE, sourceEntity, targetNavProp, targetEntityKey, null);
+  }
+
+  @Override
+  public InputStream getInputStreamForMediaLink(String entitySetName, OEntityKey entityKey, EntityQueryInfo queryInfo) {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public void updateEntityWithStream(String entitySetName, OEntity entity) {
+    // TODO Auto-generated method stub
+    
   }
 }

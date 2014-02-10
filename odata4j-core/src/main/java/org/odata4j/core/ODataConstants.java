@@ -16,13 +16,27 @@ public class ODataConstants {
   public static final String APPLICATION_ATOMSVC_XML = "application/atomsvc+xml";
   public static final String APPLICATION_ATOMSVC_XML_CHARSET_UTF8 = APPLICATION_ATOMSVC_XML + ";charset=" + Charsets.Lower.UTF_8;
 
+  public static final String APPLICATION_OCTET_STREAM = "application/octet-stream";
+  public static final String APPLICATION_XML = "application/xml";
   public static final String APPLICATION_XML_CHARSET_UTF8 = "application/xml;charset=" + Charsets.Lower.UTF_8;
   public static final String TEXT_JAVASCRIPT_CHARSET_UTF8 = "text/javascript;charset=" + Charsets.Lower.UTF_8;
   public static final String APPLICATION_JAVASCRIPT = "application/json";
+  public static final String APPLICATION_JAVASCRIPT_VERBOSE = "application/json;odata=verbose";
   public static final String APPLICATION_JAVASCRIPT_CHARSET_UTF8 = APPLICATION_JAVASCRIPT + ";charset=" + Charsets.Lower.UTF_8;
+  public static final String APPLICATION_JAVASCRIPT_VERBOSE_CHARSET_UTF8 = APPLICATION_JAVASCRIPT_VERBOSE + ";charset=" + Charsets.Lower.UTF_8;
+  public static final String APPLICATION_HTTP = "application/http";
+  public static final String APPLICATION_BINARY = "application/binary";
 
-  public static final ODataVersion DATA_SERVICE_VERSION = ODataVersion.V1;
+  public static final ODataVersion DATA_SERVICE_VERSION = ODataVersion.V3;
   public static final String DATA_SERVICE_VERSION_HEADER = DATA_SERVICE_VERSION.asString;
+
+  public static final String BINARY = "binary";
+
+  public static final String CDATA_TAG_START = "<![CDATA[";
+  public static final String CDATA_TAG_END = "]]>";
+  public static final String ERROR_TEXT = " @*#*@ Error While Reading Data @*#*@ : ";
+
+  public static final String NaN_value = "NaN";
 
   /** Common http header names. */
   public static class Headers {
@@ -30,8 +44,14 @@ public class ODataConstants {
     public static final String DATA_SERVICE_VERSION = "DataServiceVersion";
     public static final String CONTENT_TYPE = "Content-Type";
     public static final String USER_AGENT = "User-Agent";
+    public static final String LOCATION = "Location";
+    public static final String SLUG = "Slug";
     public static final String IF_MATCH = "If-Match";
+    public static final String CONTENT_TRANSFER_ENCODING = "Content-Transfer-Encoding";
+    public static final String CONTENT_LENGTH = "Content-Length";
   }
+
+  public static final int COPY_BUFFER_SIZE = 8 * 1024;
 
   /** Common character sets. */
   public static class Charsets {
@@ -49,4 +69,5 @@ public class ODataConstants {
       public static final String ISO_8859_15 = "iso-8859-15";
     }
   }
+
 }

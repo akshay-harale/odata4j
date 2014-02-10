@@ -19,6 +19,7 @@ import org.odata4j.expression.CommonExpression;
 import org.odata4j.expression.Expression;
 import org.odata4j.expression.ExpressionParser;
 import org.odata4j.expression.LiteralExpression;
+import org.odata4j.urlencoder.ConversionUtil;
 
 /**
  * An immutable entity-key, made up of either a single unnamed-value or multiple named-values.
@@ -149,6 +150,8 @@ public class OEntityKey {
         throw new IllegalArgumentException("bad keyString: " + keyString);
       String valueString = nv.length == 1 ? nv[0] : nv[1];
       try {
+        // the key might be url encoded if it comes from delete request etc as part DELETE request, decode it here.
+        valueString = ConversionUtil.decodeString(valueString);
         CommonExpression expr = ExpressionParser.parse(valueString);
         LiteralExpression literal = (LiteralExpression) expr;
         Object value = Expression.literalValue(literal);
@@ -337,6 +340,7 @@ public class OEntityKey {
         throw new IllegalArgumentException(
             "Complex key values cannot be null");
       assertSimple(nv.getValue());
+
       v[i] = NamedValues.copy(nv);
     }
     return v;

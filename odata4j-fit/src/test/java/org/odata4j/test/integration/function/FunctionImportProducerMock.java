@@ -1,5 +1,6 @@
 package org.odata4j.test.integration.function;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,7 @@ import org.odata4j.edm.EdmDataServices;
 import org.odata4j.edm.EdmEntitySet;
 import org.odata4j.edm.EdmFunctionImport;
 import org.odata4j.edm.EdmSimpleType;
+import org.odata4j.exceptions.NotImplementedException;
 import org.odata4j.producer.BaseResponse;
 import org.odata4j.producer.CountResponse;
 import org.odata4j.producer.EntitiesResponse;
@@ -254,4 +256,35 @@ public class FunctionImportProducerMock implements ODataProducer {
   public <TExtension extends OExtension<ODataProducer>> TExtension findExtension(Class<TExtension> clazz) {
     return null;
   }
+
+  @Override
+  public void beginChangeSetBoundary() {
+    throw new NotImplementedException("ChangeSets not supported for " + this.getClass().getName());
+  }
+
+  @Override
+  public void commitChangeSetBoundary() {
+    throw new NotImplementedException("ChangeSets not supported for " + this.getClass().getName());
+  }
+
+  @Override
+  public void rollbackChangeSetBoundary() {
+    throw new NotImplementedException("ChangeSets not supported for " + this.getClass().getName());
+  }
+
+  @Override
+  public EntityResponse createResponseForBatchPostOperation(String entitySetName, OEntity entity) {
+    throw new NotImplementedException("create Response For Batch Post Operation not supported for " + this.getClass().getName());
+  }
+
+  @Override
+  public InputStream getInputStreamForMediaLink(String entitySetName, OEntityKey entityKey, EntityQueryInfo queryInfo) {
+    throw new NotImplementedException("Streaming is not supported for " + this.getClass().getName());
+  }
+
+  @Override
+  public void updateEntityWithStream(String entitySetName, OEntity entity) {
+    throw new NotImplementedException("Updation of Stream not supported for " + this.getClass().getName());
+  }
+
 }

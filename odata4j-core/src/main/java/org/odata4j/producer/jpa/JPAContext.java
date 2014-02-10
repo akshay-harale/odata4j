@@ -1,5 +1,7 @@
 package org.odata4j.producer.jpa;
 
+import java.io.InputStream;
+
 import javax.persistence.EntityManager;
 import javax.persistence.EntityTransaction;
 import javax.persistence.metamodel.EntityType;
@@ -32,6 +34,8 @@ public class JPAContext implements Context {
 
   private BaseResponse response;
 
+  private ContextStream contextStream;
+
   // update, merge, delete
   protected JPAContext(EdmDataServices metadata, String entitySetName,
       OEntityKey oEntityKey, OEntity oEntity) {
@@ -45,7 +49,8 @@ public class JPAContext implements Context {
     this.metadata = metadata;
     this.entity = new ContextEntity(entitySetName, oEntityKey, null);
     this.navProperty = navProperty;
-    this.otherEntity = new ContextEntity(oEntity.getEntitySetName(), oEntity.getEntityKey(), oEntity);
+    this.otherEntity = new ContextEntity(oEntity.getEntitySetName(),
+        oEntity.getEntityKey(), oEntity);
   }
 
   // query
@@ -63,6 +68,7 @@ public class JPAContext implements Context {
     this.entity = new ContextEntity(entitySetName, oEntityKey, null);
     this.navProperty = navProperty;
     this.queryInfo = queryInfo;
+    this.contextStream = new ContextStream(null, null, null);
   }
 
   public EdmDataServices getMetadata() {
@@ -133,6 +139,21 @@ public class JPAContext implements Context {
     this.response = response;
   }
 
+  /**
+   * @return the contextStream
+   */
+  public ContextStream getContextStream() {
+    return contextStream;
+  }
+
+  /**
+   * @param contextStream
+   *            the contextStream to set
+   */
+  public void setContextStream(ContextStream contextStream) {
+    this.contextStream = contextStream;
+  }
+
   public class ContextEntity {
     private String entitySetName;
     private OEntityKey oEntityKey;
@@ -170,8 +191,7 @@ public class JPAContext implements Context {
       if (jpaEntityType == null) {
 
         jpaEntityType = JPAProducer.getJPAEntityType(em,
-            getEdmEntitySet()
-                .getType().getName());
+            getEdmEntitySet().getType().getName());
       }
       return jpaEntityType;
     }
@@ -185,17 +205,15 @@ public class JPAContext implements Context {
 
     public String getKeyAttributeName() {
       if (keyAttributeName == null) {
-        keyAttributeName = JPAEdmGenerator
-            .getIdAttribute(getJPAEntityType()).getName();
+        keyAttributeName = JPAEdmGenerator.getIdAttribute(
+            getJPAEntityType()).getName();
       }
       return keyAttributeName;
     }
 
     public Object getTypeSafeEntityKey() {
-      return JPAProducer.typeSafeEntityKey(
-          getEntityManager(),
-          getJPAEntityType(),
-          oEntityKey);
+      return JPAProducer.typeSafeEntityKey(getEntityManager(),
+          getJPAEntityType(), oEntityKey);
     }
 
     public Object getJpaEntity() {
@@ -215,6 +233,84 @@ public class JPAContext implements Context {
       setEntitySetName(oEntity.getEntitySetName());
       this.oEntityKey = oEntity != null ? oEntity.getEntityKey() : null;
     }
+  }
+
+  /**
+   * The Class ContextStream.
+   */
+  public class ContextStream {
+
+    /** The input stream. */
+    private InputStream inputStream;
+
+    /** The content-type. */
+    private String contentType;
+
+    /** The content-disposition. */
+    private String contentDisposition;
+
+    /**
+     * Instantiates a new context entity.
+     * 
+     * @param inputStream
+     *            the input stream
+     * @param contentType
+     *            the content type
+     * @param contentDisposition
+     *            the content disposition
+     */
+    public ContextStream(InputStream inputStream, String contentType,
+        String contentDisposition) {
+      this.inputStream = inputStream;
+      this.contentType = contentType;
+      this.contentDisposition = contentDisposition;
+    }
+
+    /**
+     * @return the inputStream
+     */
+    public InputStream getInputStream() {
+      return inputStream;
+    }
+
+    /**
+     * @param inputStream
+     *            the inputStream to set
+     */
+    public void setInputStream(InputStream inputStream) {
+      this.inputStream = inputStream;
+    }
+
+    /**
+     * @return the contentType
+     */
+    public String getContentType() {
+      return contentType;
+    }
+
+    /**
+     * @param contentType
+     *            the contentType to set
+     */
+    public void setContentType(String contentType) {
+      this.contentType = contentType;
+    }
+
+    /**
+     * @return the contentDisposition
+     */
+    public String getContentDisposition() {
+      return contentDisposition;
+    }
+
+    /**
+     * @param contentDisposition
+     *            the contentDisposition to set
+     */
+    public void setContentDisposition(String contentDisposition) {
+      this.contentDisposition = contentDisposition;
+    }
+
   }
 
   public static abstract class EntityAccessor {

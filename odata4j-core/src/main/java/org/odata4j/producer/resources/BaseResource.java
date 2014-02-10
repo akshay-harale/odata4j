@@ -39,10 +39,12 @@ public abstract class BaseResource {
     // see spec [ms-odata] section 1.7
 
     ODataVersion version = InternalUtil.getDataServiceVersion(httpHeaders.getRequestHeaders().getFirst(ODataConstants.Headers.DATA_SERVICE_VERSION));
-    return convertFromString(payload, httpHeaders.getMediaType(), version, metadata, entitySetName, entityKey);
+    return convertFromString(payload, httpHeaders.getMediaType(), version, metadata, entitySetName, entityKey, false);
   }
 
-  private static OEntity convertFromString(String requestEntity, MediaType type, ODataVersion version, EdmDataServices metadata, String entitySetName, OEntityKey entityKey) throws NotAcceptableException {
+  protected static OEntity convertFromString(String requestEntity, MediaType type, ODataVersion version, EdmDataServices metadata, String entitySetName, OEntityKey entityKey, Boolean isResponse) throws NotAcceptableException {
+    //previously we are hard coding it to have false, since we always get the entity to be created as name, value pair. 
+    //setting the isResponse to true only when we are building the OEntity from the response as it contain root element, metadata, data,etc
     FormatParser<Entry> parser = FormatParserFactory.getParser(Entry.class, type,
         new Settings(version, metadata, entitySetName, entityKey, false));
     Entry entry = parser.parse(new StringReader(requestEntity));
@@ -72,13 +74,20 @@ public abstract class BaseResource {
   protected OMediaLinkExtension getMediaLinkExtension(HttpHeaders httpHeaders, UriInfo uriInfo, EdmEntitySet entitySet, ODataProducer producer,
       ODataContext context) {
 
-    OMediaLinkExtensions mediaLinkExtensions = producer.findExtension(OMediaLinkExtensions.class);
+    OMediaLinkExtension mediaLinkExtension = producer.findExtension(OMediaLinkExtension.class);
 
-    if (mediaLinkExtensions == null) {
+    if (mediaLinkExtension == null) {
+      OMediaLinkExtensions mles = producer.findExtension(OMediaLinkExtensions.class);
+      if (mles != null) {
+        mediaLinkExtension = mles.create(context);
+      }
+    } 
+    
+    if (mediaLinkExtension == null) {
       throw new NotImplementedException();
     }
 
-    return mediaLinkExtensions.create(context);
+    return mediaLinkExtension;
   }
 
   protected OEntity createOrUpdateMediaLinkEntry(HttpHeaders httpHeaders,
@@ -97,28 +106,34 @@ public abstract class BaseResource {
     OEntity mle = key == null
         ? mediaLinkExtension.createMediaLinkEntry(context, entitySet, httpHeaders)
         : mediaLinkExtension.getMediaLinkEntryForUpdateOrDelete(context, entitySet, key, httpHeaders);
+/*
+        // now get a stream we can write the incoming bytes into.
+        OutputStream outStream = key == null
+            ? mediaLinkExtension.getOutputStreamForMediaLinkEntryCreate(context, mle, null, null)
+            : mediaLinkExtension.getOutputStreamForMediaLinkEntryUpdate(context, mle, null, null);
 
-    // now get a stream we can write the incoming bytes into.
-    OutputStream outStream = key == null
-        ? mediaLinkExtension.getOutputStreamForMediaLinkEntryCreate(context, mle, null /*etag*/, null /*QueryInfo, may get rid of this */)
-        : mediaLinkExtension.getOutputStreamForMediaLinkEntryUpdate(context, mle, null, null);
+        // write the stream
+        try {
+          InternalUtil.copyInputToOutput(payload, outStream);
+        } finally {
+          outStream.close();
+        }
 
+        // more info about the mle may be available now.
+        return mediaLinkExtension.updateMediaLinkEntry(context, mle, outStream);
+*/        
     // write the stream
-    try {
-      InternalUtil.copyInputToOutput(payload, outStream);
-    } finally {
-      outStream.close();
-    }
+    mle.setMediaLinkStream(payload);
 
     // more info about the mle may be available now.
-    return mediaLinkExtension.updateMediaLinkEntry(context, mle, outStream);
+    return mle;
   }
-
+  
   /**
    * Not all the jax-rs engines can not directly inject ContextResolvers (not defined by JSR-311) classes
    * into resources, however they support Context injection, from which ContextResolvers can be queried
    */
-  protected ODataProducer getODataProducer(Providers providers) {
+  public static  ODataProducer getODataProducer(Providers providers) {
     ContextResolver<ODataProducer> producerResolver = providers.getContextResolver(ODataProducer.class,MediaType.WILDCARD_TYPE);
     return producerResolver.getContext(ODataProducer.class);
   }

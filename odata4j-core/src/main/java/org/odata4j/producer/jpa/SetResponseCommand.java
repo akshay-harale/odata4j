@@ -13,9 +13,11 @@ import javax.persistence.metamodel.ManagedType;
 import javax.persistence.metamodel.PluralAttribute;
 import javax.persistence.metamodel.SingularAttribute;
 
+import org.core4j.CoreUtils;
 import org.core4j.Enumerable;
 import org.core4j.Func1;
 import org.core4j.Predicate1;
+import org.eclipse.persistence.mappings.DatabaseMapping;
 import org.odata4j.core.OEntities;
 import org.odata4j.core.OEntity;
 import org.odata4j.core.OEntityKey;
@@ -23,6 +25,7 @@ import org.odata4j.core.OLink;
 import org.odata4j.core.OLinks;
 import org.odata4j.core.OProperties;
 import org.odata4j.core.OProperty;
+import org.odata4j.core.StreamEntity;
 import org.odata4j.core.Throwables;
 import org.odata4j.edm.EdmDataServices;
 import org.odata4j.edm.EdmEntitySet;
@@ -32,7 +35,9 @@ import org.odata4j.edm.EdmProperty;
 import org.odata4j.edm.EdmSimpleType;
 import org.odata4j.expression.EntitySimpleProperty;
 import org.odata4j.expression.Expression;
+import org.odata4j.producer.MediaLinkExtension;
 import org.odata4j.producer.Responses;
+import org.odata4j.util.OdataHelper;
 
 public class SetResponseCommand implements Command {
 
@@ -128,7 +133,18 @@ public class SetResponseCommand implements Command {
       // get properties
       for (EdmProperty ep : ees.getType().getProperties()) {
 
+        DatabaseMapping mapping = null;
+        Attribute<?, ?> att;
+        if (!ees.getType().getKeys().contains(ep.getName())) {
+          att = entityType.getAttribute(ep.getName());
+          mapping = CoreUtils.getFieldValue(att, "mapping", DatabaseMapping.class);
+        }
+
         if (!JPAProducer.isSelected(ep.getName(), select)) {
+          continue;
+        }
+
+        if (ees.getType().getHasStream() != null && ees.getType().getHasStream() && mapping != null && mapping.isLazy()) {
           continue;
         }
 
@@ -144,7 +160,7 @@ public class SetResponseCommand implements Command {
 
         } else {
           // get the simple attribute
-          Attribute<?, ?> att = entityType.getAttribute(ep.getName());
+          att = entityType.getAttribute(ep.getName());
           JPAMember member = JPAMember.create(att, jpaEntity);
           Object value = member.get();
 
@@ -276,6 +292,15 @@ public class SetResponseCommand implements Command {
         }
       }
 
+      EdmEntitySet currentEntitySet = metadata.getEdmEntitySet(JPAEdmGenerator
+          .getEntitySetName(entityType));
+      List<Object> mediaList = new ArrayList<Object>();
+      if (currentEntitySet.getType().getHasStream() != null && currentEntitySet.getType().getHasStream()) {
+        this.populateExtensions(ees, entityType, jpaEntity, metadata,
+            mediaList);
+        return OEntities.create(ees, SetResponseCommand.toOEntityKey(jpaEntity, idAtt), properties, links, mediaList.toArray(new Object[mediaList.size()]));
+      }
+
       return OEntities.create(ees, SetResponseCommand.toOEntityKey(jpaEntity, idAtt), properties, links);
 
     } catch (Exception e) {
@@ -294,6 +319,26 @@ public class SetResponseCommand implements Command {
 
     }
     return newList;
+  }
+
+  private void populateExtensions(EdmEntitySet ees, EntityType<?> entityType, Object jpaEntity, EdmDataServices metadata,
+      List<Object> mediaList) {
+
+    EdmEntitySet currentEntitySet = metadata.getEdmEntitySet(JPAEdmGenerator.getEntitySetName(entityType));
+    if (currentEntitySet.getType().getHasStream() != null && currentEntitySet.getType().getHasStream()) {
+      final MediaLinkExtension mle = new MediaLinkExtension();
+      mediaList.add(mle);
+    }
+    for (EdmProperty ep : ees.getType().getProperties()) {
+      Attribute<?, ?> sa = entityType.getAttribute(ep.getName());
+      if (ep.getType().equals(EdmSimpleType.STREAM)) {
+        StreamEntity streamEntity = new StreamEntity();
+        streamEntity.setAtomEntityType(OdataHelper.getMediaContentType(ep.getName(), entityType));
+        streamEntity.setAtomEntitySource(JPAConstants.PATH_SEPARATOR_FORWARD_SLASH
+            + JPAConstants.URL_PATTERN_FOR_MEDIA_LINK);
+        mediaList.add(streamEntity);
+      }
+    }
   }
 
   static Object getIdValue(

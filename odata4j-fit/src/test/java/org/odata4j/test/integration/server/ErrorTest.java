@@ -74,10 +74,10 @@ public class ErrorTest extends AbstractJettyHttpClientTest {
     ContentExchange exchange = sendRequest(FEED_URL + "(1.2)");
     exchange.waitForDone();
     assertThat(exchange.getStatus(), is(HttpExchange.STATUS_COMPLETED));
-    assertThat(exchange.getResponseStatus(), is(HttpStatus.BAD_REQUEST_400));
+    assertThat(exchange.getResponseStatus(), is(HttpStatus.NOT_FOUND_404));
     assertThat(exchange.getResponseFields().getStringField(HttpHeaders.CONTENT_TYPE), containsString(MediaType.APPLICATION_XML));
     assertThat(exchange.getResponseContent().length(), greaterThan(0));
-    assertRegexMatches(exchange.getResponseContent(), ".*<code>BadRequestException</code>.*<innererror>.+</innererror>.*");
+    assertRegexMatches(exchange.getResponseContent(), ".*<code>NotFoundException</code>.*<innererror>.+</innererror>.*");
   }
 
   @Test
@@ -86,10 +86,10 @@ public class ErrorTest extends AbstractJettyHttpClientTest {
     ContentExchange exchange = sendRequest(FEED_URL + "(1.2)?$format=json");
     exchange.waitForDone();
     assertThat(exchange.getStatus(), is(HttpExchange.STATUS_COMPLETED));
-    assertThat(exchange.getResponseStatus(), is(HttpStatus.BAD_REQUEST_400));
+    assertThat(exchange.getResponseStatus(), is(HttpStatus.NOT_FOUND_404));
     assertThat(exchange.getResponseFields().getStringField(HttpHeaders.CONTENT_TYPE), containsString(MediaType.APPLICATION_JSON));
     assertThat(exchange.getResponseContent().length(), greaterThan(0));
-    assertRegexMatches(exchange.getResponseContent(), ".*\"code\"\\s*:\\s*\"BadRequestException\".*\"innererror\"\\s*:\\s*\".+\".*");
+    assertRegexMatches(exchange.getResponseContent(), ".*\"code\"\\s*:\\s*\"NotFoundException\".*\"innererror\"\\s*:\\s*\".+\".*");
   }
 
   private void assertRegexMatches(String source, String target) throws Exception {

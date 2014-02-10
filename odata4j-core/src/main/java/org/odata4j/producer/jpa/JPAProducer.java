@@ -1,8 +1,10 @@
 package org.odata4j.producer.jpa;
 
+import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -50,11 +52,14 @@ import org.odata4j.producer.EntitiesResponse;
 import org.odata4j.producer.EntityIdResponse;
 import org.odata4j.producer.EntityQueryInfo;
 import org.odata4j.producer.EntityResponse;
+import org.odata4j.producer.MediaLinkExtension;
 import org.odata4j.producer.ODataContext;
 import org.odata4j.producer.ODataProducer;
+import org.odata4j.producer.OMediaLinkExtension;
 import org.odata4j.producer.QueryInfo;
 import org.odata4j.producer.Responses;
 import org.odata4j.producer.edm.MetadataProducer;
+import org.odata4j.producer.resources.BatchProcessThreadLocal;
 
 public class JPAProducer implements ODataProducer {
 
@@ -67,13 +72,21 @@ public class JPAProducer implements ODataProducer {
     MergeEntity,
     UpdateEntity,
     GetLinks,
-    GetCount
+    GetCount,
+    CallFunction,
+    StartChangeSetBoundary,
+    CommitChangeSetBoundary,
+    RollbackChangeSetBoundary,
+    CreateResponseForBatch,
+    UpdateStream,
+    GetStream
   };
 
   private final EntityManagerFactory emf;
   private final EdmDataServices metadata;
   private final int maxResults;
   private final MetadataProducer metadataProducer;
+  private final ODataFunctionCallback functionCallback;
   private Command createEntityCommand;
   private Command createAndLinkCommand;
   private Command getEntitiesCommand;
@@ -83,47 +96,169 @@ public class JPAProducer implements ODataProducer {
   private Command updateEntityCommand;
   private Command getLinksCommand;
   private Command getCountCommand;
+  private Command getStreamCommand;
+  private Command updateStreamCommand;
+  private Command createResponseForBatchCommand;
   private JPAProducerBehavior producerBehavior;
 
-  public JPAProducer(
-      EntityManagerFactory emf,
-      String namespace,
+  private HashMap<CommandType, Command> commandMap = new HashMap<CommandType, Command>();
+
+  private HashMap<CommandType, Command> commandMapForBatch = new HashMap<CommandType, Command>();
+
+  public JPAProducer(EntityManagerFactory emf, String namespace,
       int maxResults) {
-    this(emf, new JPAEdmGenerator(emf, namespace).generateEdm(null).build(), maxResults, null, null);
+    this(emf,
+        new JPAEdmGenerator(emf, namespace).generateEdm(null).build(),
+        maxResults, null, null);
   }
 
-  public JPAProducer(
-      EntityManagerFactory emf,
-      EdmDataServices metadata,
+  public JPAProducer(EntityManagerFactory emf, EdmDataServices metadata,
       int maxResults) {
     this(emf, metadata, maxResults, null, null);
   }
 
-  public JPAProducer(
-      EntityManagerFactory emf,
-      EdmDataServices metadata,
-      int maxResults,
-      EdmDecorator metadataDecorator) {
+  public JPAProducer(EntityManagerFactory emf, EdmDataServices metadata,
+      int maxResults, EdmDecorator metadataDecorator) {
     this(emf, metadata, maxResults, metadataDecorator, null);
   }
 
-  public JPAProducer(
-      EntityManagerFactory emf,
-      EdmDataServices metadata,
-      int maxResults,
-      EdmDecorator metadataDecorator,
+  public JPAProducer(EntityManagerFactory emf, EdmDataServices metadata,
+      int maxResults, EdmDecorator metadataDecorator,
       JPAProducerBehavior producerBehavior) {
+
+    this(emf, metadata, maxResults, metadataDecorator, producerBehavior,
+        null);
+  }
+
+  public JPAProducer(EntityManagerFactory emf, EdmDataServices metadata,
+      int maxResults, EdmDecorator metadataDecorator,
+      JPAProducerBehavior producerBehavior, ODataFunctionCallback callback) {
 
     this.emf = emf;
     this.maxResults = maxResults;
     this.metadata = metadata;
     this.metadataProducer = new MetadataProducer(this, metadataDecorator);
     this.producerBehavior = producerBehavior;
+    this.functionCallback = callback;
 
     initCommandChains();
   }
 
-  protected void initCommandChains() {
+  protected Command getCommandChain(CommandType commandType, Boolean isBatch) {
+    // create a list of commands
+    if (isBatch) {
+      return commandMapForBatch.get(commandType);
+    } else {
+      return commandMap.get(commandType);
+    }
+  }
+
+  private void initCreateCommandChain() {
+    List<Command> commands = new ArrayList<Command>();
+    /* initialize the create processors */
+    commands = new ArrayList<Command>();
+    // create an EntityManager
+    commands.add(new EntityManagerCommand(emf));
+    // begin a transaction
+    commands.add(new BeginTransactionCommand());
+    // convert the given OEntity to a JPAEntity
+    commands.add(new OEntityToJPAEntityCommand(true));
+    // new command to set Inputstream if hasStream=true
+    commands.add(new ApplyMediaPropertiesCommand());
+    // persist the JPAEntity
+    commands.add(new PersistJPAEntityCommand());
+    // commit the transaction
+    commands.add(new CommitTransactionCommand());
+    // reread the JPAEntity if necessary
+    commands.add(new ReReadJPAEntityCommand());
+    // convert the JPAEntity to OEntity and set the response
+    commands.add(new SetResponseCommand());
+    createEntityCommand = createChain(CommandType.CreateEntity, commands);
+    commandMap.put(CommandType.CreateEntity, createEntityCommand);
+
+    /* initialize the create processors for batch */
+    commands = new ArrayList<Command>();
+    // For batch operation set the ThreadlocalEntityManager into context.
+    commands.add(new SetEntityManagerForBatch());
+    // convert the given OEntity to a JPAEntity
+    commands.add(new OEntityToJPAEntityCommand(true));
+    // new command to set Inputstream if hasStream=true
+    commands.add(new ApplyMediaPropertiesCommand());
+    // persist the JPAEntity
+    commands.add(new PersistJPAEntityCommand());
+    // sets the intermediate response for batch create operation.
+    commands.add(new SetIntermediateResponseForBatchCommand());
+    // convert the JPAEntity to OEntity and set the response
+    commands.add(new SetResponseCommand());
+    createEntityCommand = createChain(CommandType.CreateEntity, commands);
+    commandMapForBatch.put(CommandType.CreateEntity, createEntityCommand);
+
+  }
+
+  private void initCreateAndLinkCommandChain() {
+    List<Command> commands = new ArrayList<Command>();
+    /* create and link processors */
+    commands = new ArrayList<Command>();
+    // create an EntityManager
+    commands.add(new EntityManagerCommand(emf));
+    // begin a transaction
+    commands.add(new BeginTransactionCommand());
+    // get the entity we want the new entity add to (parent entity)
+    commands.add(new GetEntityCommand());
+    // convert the given new OEntity to a new JPAEntity
+    commands.add(new OEntityToJPAEntityCommand(
+        JPAContext.EntityAccessor.OTHER, true));
+    // add the new JPAEntity to the parent entity
+    commands.add(new CreateAndLinkCommand());
+    // commit the transaction
+    commands.add(new CommitTransactionCommand());
+    // convert the JPAEntity to OEntity and set the response
+    commands.add(new SetResponseCommand(JPAContext.EntityAccessor.OTHER));
+    createAndLinkCommand = createChain(CommandType.CreateAndLink, commands);
+    commandMap.put(CommandType.CreateAndLink, createAndLinkCommand);
+
+    /* create and link processors for batch */
+    commands = new ArrayList<Command>();
+    // For batch operation set the ThreadlocalEntityManager into context.
+    commands.add(new SetEntityManagerForBatch());
+    // get the entity we want the new entity add to (parent entity)
+    commands.add(new GetEntityCommand());
+    // convert the given new OEntity to a new JPAEntity
+    commands.add(new OEntityToJPAEntityCommand(
+        JPAContext.EntityAccessor.OTHER, true));
+    // add the new JPAEntity to the parent entity
+    commands.add(new CreateAndLinkCommand());
+    // sets the intermediate response for batch create operation.
+    commands.add(new SetIntermediateResponseForBatchCommand(JPAContext.EntityAccessor.OTHER));
+    // convert the JPAEntity to OEntity and set the response
+    commands.add(new SetResponseCommand(JPAContext.EntityAccessor.OTHER));
+    createAndLinkCommand = createChain(CommandType.CreateAndLink, commands);
+    commandMapForBatch.put(CommandType.CreateAndLink, createAndLinkCommand);
+
+  }
+
+  /**
+   * 
+   */
+  private void initCreateResponseForBatchChain() {
+    List<Command> commands = new ArrayList<Command>();
+    // create an EntityManager
+    commands.add(new EntityManagerCommand(emf));
+    // Change the OEntityToJPAEntity
+    commands.add(new OEntityToJPAEntityCommand(true));
+    // Merge the detached JPA Entity so that it is not associated with the EM session
+    commands.add(new MergeForBatchCreateCommand());
+    // reread the JPAEntity for system
+    commands.add(new ReReadJPAEntityCommand());
+    // this internally performs jpaEntityToOEntity
+    commands.add(new SetResponseCommand());
+
+    createResponseForBatchCommand = createChain(CommandType.CreateResponseForBatch, commands);
+    commandMapForBatch.put(CommandType.CreateResponseForBatch, createResponseForBatchCommand);
+
+  }
+
+  private void initGetEntitiesChain() {
     List<Command> commands = new ArrayList<Command>();
     /* query processors */
     // create an EntityManager
@@ -135,43 +270,14 @@ public class JPAProducer implements ODataProducer {
     // convert the query result to response
     commands.add(new SetResponseCommand());
     getEntitiesCommand = createChain(CommandType.GetEntities, commands);
+    // We use the same commands for batch/non-batch as we don't require transaction for getEntities
+    commandMap.put(CommandType.GetEntities, getEntitiesCommand);
+    commandMapForBatch.put(CommandType.GetEntities, getEntitiesCommand);
 
-    /* initialize the create processors */
-    commands = new ArrayList<Command>();
-    // create an EntityManager
-    commands.add(new EntityManagerCommand(emf));
-    // begin a transaction
-    commands.add(new BeginTransactionCommand());
-    // convert the given OEntity to a JPAEntity
-    commands.add(new OEntityToJPAEntityCommand(true));
-    // persist the JPAEntity
-    commands.add(new PersistJPAEntityCommand());
-    // commit the transaction
-    commands.add(new CommitTransactionCommand());
-    // reread the JPAEntity if necessary
-    commands.add(new ReReadJPAEntityCommand());
-    // convert the JPAEntity to OEntity and set the response
-    commands.add(new SetResponseCommand());
-    createEntityCommand = createChain(CommandType.CreateEntity, commands);
+  }
 
-    /* create and link processors */
-    commands = new ArrayList<Command>();
-    // create an EntityManager
-    commands.add(new EntityManagerCommand(emf));
-    // begin a transaction
-    commands.add(new BeginTransactionCommand());
-    // get the entity we want the new entity add to (parent entity)
-    commands.add(new GetEntityCommand());
-    // convert the given new OEntity to a new JPAEntity
-    commands.add(new OEntityToJPAEntityCommand(JPAContext.EntityAccessor.OTHER, true));
-    // add the new JPAEntity to the parent entity
-    commands.add(new CreateAndLinkCommand());
-    // commit the transaction
-    commands.add(new CommitTransactionCommand());
-    // convert the JPAEntity to OEntity and set the response
-    commands.add(new SetResponseCommand(JPAContext.EntityAccessor.OTHER));
-    createAndLinkCommand = createChain(CommandType.CreateAndLink, commands);
-
+  private void initGetEntityChain() {
+    List<Command> commands = new ArrayList<Command>();
     /* get entity processors */
     commands = new ArrayList<Command>();
     // create an EntityManager
@@ -182,6 +288,13 @@ public class JPAProducer implements ODataProducer {
     commands.add(new SetResponseCommand());
     getEntityCommand = createChain(CommandType.GetEntity, commands);
 
+    // We use the same commands for batch/non-batch as we don't require transaction for getEntity
+    commandMap.put(CommandType.GetEntity, getEntityCommand);
+    commandMapForBatch.put(CommandType.GetEntity, getEntityCommand);
+  }
+
+  private void initDeleteEntityChain() {
+    List<Command> commands = new ArrayList<Command>();
     /* delete entity processors */
     commands = new ArrayList<Command>();
     // create an EntityManager
@@ -196,7 +309,23 @@ public class JPAProducer implements ODataProducer {
     commands.add(new CommitTransactionCommand());
     // the response stays empty
     deleteEntityCommand = createChain(CommandType.DeleteEntity, commands);
+    commandMap.put(CommandType.DeleteEntity, deleteEntityCommand);
 
+    /* delete entity processors for batch */
+    commands = new ArrayList<Command>();
+    // For batch operation set the ThreadlocalEntityManager into context.
+    commands.add(new SetEntityManagerForBatch());
+    // get the JPAEntity to delete
+    commands.add(new GetEntityCommand());
+    // delete the JPAEntity
+    commands.add(new DeleteEntityCommand());
+    // the response stays empty
+    deleteEntityCommand = createChain(CommandType.DeleteEntity, commands);
+    commandMapForBatch.put(CommandType.DeleteEntity, deleteEntityCommand);
+  }
+
+  private void initMergeEntityChain() {
+    List<Command> commands = new ArrayList<Command>();
     /* merge entity processors */
     commands = new ArrayList<Command>();
     // create an EntityManager
@@ -211,7 +340,23 @@ public class JPAProducer implements ODataProducer {
     commands.add(new CommitTransactionCommand());
     // the response stays empty
     mergeEntityCommand = createChain(CommandType.MergeEntity, commands);
+    commandMap.put(CommandType.MergeEntity, mergeEntityCommand);
 
+    /* merge entity processors for batch */
+    commands = new ArrayList<Command>();
+    // For batch operation set the ThreadlocalEntityManager into context.
+    commands.add(new SetEntityManagerForBatch());
+    // get the JPAEntity to delete
+    commands.add(new GetEntityCommand());
+    // delete the JPAEntity
+    commands.add(new MergeEntityCommand());
+    // the response stays empty
+    mergeEntityCommand = createChain(CommandType.MergeEntity, commands);
+    commandMapForBatch.put(CommandType.MergeEntity, mergeEntityCommand);
+  }
+
+  private void initUpdateEntityChain() {
+    List<Command> commands = new ArrayList<Command>();
     /* update entity processors */
     commands = new ArrayList<Command>();
     // create an EntityManager
@@ -226,7 +371,24 @@ public class JPAProducer implements ODataProducer {
     commands.add(new CommitTransactionCommand());
     // the response stays empty
     updateEntityCommand = createChain(CommandType.UpdateEntity, commands);
+    commandMap.put(CommandType.UpdateEntity, updateEntityCommand);
 
+    /* update entity processors for batch */
+    commands = new ArrayList<Command>();
+    // For batch operation set the ThreadlocalEntityManager into context.
+    commands.add(new SetEntityManagerForBatch());
+    // get the JPAEntity to delete
+    commands.add(new OEntityToJPAEntityCommand(true));
+    // delete the JPAEntity
+    commands.add(new UpdateEntityCommand());
+    // the response stays empty
+    updateEntityCommand = createChain(CommandType.UpdateEntity, commands);
+    commandMapForBatch.put(CommandType.UpdateEntity, updateEntityCommand);
+
+  }
+
+  private void initGetLinksChain() {
+    List<Command> commands = new ArrayList<Command>();
     /* get links command */
     commands = new ArrayList<Command>();
     // create an EntityManager
@@ -239,6 +401,14 @@ public class JPAProducer implements ODataProducer {
     commands.add(new SetResponseCommand());
     getLinksCommand = createChain(CommandType.GetLinks, commands);
 
+    // We use the same commands for batch/non-batch as we don't require transaction for getLinks
+    commandMap.put(CommandType.GetLinks, getLinksCommand);
+    commandMapForBatch.put(CommandType.GetLinks, getLinksCommand);
+
+  }
+
+  private void initGetCountChain() {
+    List<Command> commands = new ArrayList<Command>();
     /* get entities count processors */
     commands = new ArrayList<Command>();
     // create an EntityManager
@@ -252,6 +422,112 @@ public class JPAProducer implements ODataProducer {
     // set the count into the response
     commands.add(new SetResponseCommand());
     getCountCommand = createChain(CommandType.GetCount, commands);
+
+    // We use the same commands for batch/non-batch as we don't require transaction for getLinks
+    commandMap.put(CommandType.GetCount, getCountCommand);
+    commandMapForBatch.put(CommandType.GetCount, getCountCommand);
+
+  }
+
+  private void initGetStramChain() {
+    List<Command> commands = new ArrayList<Command>();
+    /* get stream processors */
+    commands = new ArrayList<Command>();
+    // create an EntityManager
+    commands.add(new EntityManagerCommand(emf));
+    // get the input stream for media link
+    commands.add(new GetStreamCommand());
+    getStreamCommand = createChain(CommandType.GetStream, commands);
+    // We use the same commands for batch/non-batch as we don't require transaction for getRequests
+    commandMap.put(CommandType.GetStream, getStreamCommand);
+    // Get Stream in batch is very unlikely 
+    commandMapForBatch.put(CommandType.GetStream, getStreamCommand);
+
+  }
+
+  private void initUpdateStramChain() {
+    List<Command> commands = new ArrayList<Command>();
+    /* update entity processors */
+    commands = new ArrayList<Command>();
+    // create an EntityManager
+    commands.add(new EntityManagerCommand(emf));
+    // begin transaction
+    commands.add(new BeginTransactionCommand());
+    // get the JPAEntity to merge stream
+    commands.add(new GetEntityCommand());
+    // merge the JPAEntity
+    commands.add(new UpdateStreamCommand());
+    // commit the transaction
+    commands.add(new CommitTransactionCommand());
+    // the response stays empty
+    updateStreamCommand = createChain(CommandType.UpdateStream, commands);
+    commandMap.put(CommandType.UpdateStream, updateStreamCommand);
+
+    /* update entity processors */
+    commands = new ArrayList<Command>();
+    // For batch operation set the ThreadlocalEntityManager into context.
+    commands.add(new SetEntityManagerForBatch());
+    // get the JPAEntity to merge stream
+    commands.add(new GetEntityCommand());
+    // merge the JPAEntity
+    commands.add(new UpdateStreamCommand());
+    // the response stays empty
+    updateStreamCommand = createChain(CommandType.UpdateStream, commands);
+    commandMapForBatch.put(CommandType.UpdateStream, updateStreamCommand);
+  }
+
+  private void initChangeSetCommandChains() {
+    List<Command> commands = new ArrayList<Command>();
+    commands = new ArrayList<Command>();
+    // create an EntityManager for batch which is bound to ThreadLocal
+    commands.add(new CreateThreadLocalEntityMgrCommand(emf));
+    // begin a transaction
+    commands.add(new StartBatchTransactionCommand());
+
+    Command startChangeSetBoundaryChain = createChain(CommandType.StartChangeSetBoundary, commands);
+    // add this command chain to Hashmaps
+    this.commandMapForBatch.put(CommandType.StartChangeSetBoundary, startChangeSetBoundaryChain);
+
+    commands = new ArrayList<Command>();
+    // create an EntityManager for batch which is bound to ThreadLocal
+    commands.add(new SetEntityManagerForBatch());
+
+    commands.add(new CommitTransactionCommand());
+    // Close the Thread entity manager
+    commands.add(new CloseThreadLocalEntityMgrCommand());
+
+    Command commitChangeSetBoundaryChain = createChain(CommandType.CommitChangeSetBoundary, commands);
+    // add this command chain to Hashmaps
+    this.commandMapForBatch.put(CommandType.CommitChangeSetBoundary, commitChangeSetBoundaryChain);
+
+    commands = new ArrayList<Command>();
+    // create an EntityManager for batch which is bound to ThreadLocal
+    commands.add(new SetEntityManagerForBatch());
+
+    commands.add(new RollbackTransactionCommand());
+    // begin a transaction
+    commands.add(new CloseThreadLocalEntityMgrCommand());
+
+    Command rollbackChangeSetBoundaryChain = createChain(CommandType.RollbackChangeSetBoundary, commands);
+    // add this command chain to Hashmaps
+    this.commandMapForBatch.put(CommandType.RollbackChangeSetBoundary, rollbackChangeSetBoundaryChain);
+
+  }
+
+  protected void initCommandChains() {
+    initGetEntitiesChain();
+    initCreateCommandChain();
+    initCreateAndLinkCommandChain();
+    initCreateResponseForBatchChain();
+    initGetEntityChain();
+    initDeleteEntityChain();
+    initMergeEntityChain();
+    initUpdateEntityChain();
+    initGetLinksChain();
+    initGetCountChain();
+    initGetStramChain();
+    initUpdateStramChain();
+    initChangeSetCommandChains();
   }
 
   private Command createChain(CommandType type, List<Command> commands) {
@@ -273,24 +549,29 @@ public class JPAProducer implements ODataProducer {
   }
 
   @Override
-  public EntitiesResponse getEntities(ODataContext context, String entitySetName, QueryInfo queryInfo) {
-    JPAContext jpaContext = new JPAContext(metadata, entitySetName, queryInfo);
+  public EntitiesResponse getEntities(ODataContext context,
+      String entitySetName, QueryInfo queryInfo) {
+    JPAContext jpaContext = new JPAContext(metadata, entitySetName,
+        queryInfo);
     getEntitiesCommand.execute(jpaContext);
     return (EntitiesResponse) jpaContext.getResponse();
   }
 
   @Override
-  public EntityResponse getEntity(ODataContext context, String entitySetName, OEntityKey entityKey, EntityQueryInfo queryInfo) {
-    JPAContext jpaContext = new JPAContext(metadata, entitySetName, entityKey, null,
-        queryInfo);
+  public EntityResponse getEntity(ODataContext context, String entitySetName,
+      OEntityKey entityKey, EntityQueryInfo queryInfo) {
+    JPAContext jpaContext = new JPAContext(metadata, entitySetName,
+        entityKey, null, queryInfo);
     getEntityCommand.execute(jpaContext);
     return (EntityResponse) jpaContext.getResponse();
   }
 
   @Override
-  public BaseResponse getNavProperty(ODataContext context, String entitySetName, OEntityKey entityKey, String navProp, QueryInfo queryInfo) {
-    JPAContext jpaContext = new JPAContext(metadata, entitySetName, entityKey,
-        navProp, queryInfo);
+  public BaseResponse getNavProperty(ODataContext context,
+      String entitySetName, OEntityKey entityKey, String navProp,
+      QueryInfo queryInfo) {
+    JPAContext jpaContext = new JPAContext(metadata, entitySetName,
+        entityKey, navProp, queryInfo);
     getEntitiesCommand.execute(jpaContext);
     return jpaContext.getResponse();
   }
@@ -299,45 +580,74 @@ public class JPAProducer implements ODataProducer {
   public void close() {}
 
   @Override
-  public EntityResponse createEntity(ODataContext context, String entitySetName, OEntity entity) {
-    JPAContext jpaContext = new JPAContext(metadata, entitySetName, null, entity);
+  public EntityResponse createEntity(ODataContext context,
+      String entitySetName, OEntity entity) {
+    JPAContext jpaContext = new JPAContext(metadata, entitySetName, null,
+        entity);
+    Boolean isBatch = BatchProcessThreadLocal.isBatchProcess() != null ? BatchProcessThreadLocal
+        .isBatchProcess() : false;
+    Command createEntityCommand = this.getCommandChain(
+        CommandType.CreateEntity, isBatch);
     createEntityCommand.execute(jpaContext);
     return (EntityResponse) jpaContext.getResponse();
   }
 
   @Override
-  public EntityResponse createEntity(ODataContext context, String entitySetName, OEntityKey entityKey, String navProp, OEntity entity) {
-    JPAContext jpaContext = new JPAContext(metadata, entitySetName, entityKey,
-        navProp, entity);
+  public EntityResponse createEntity(ODataContext context,
+      String entitySetName, OEntityKey entityKey, String navProp,
+      OEntity entity) {
+    JPAContext jpaContext = new JPAContext(metadata, entitySetName,
+        entityKey, navProp, entity);
+    Boolean isBatch = BatchProcessThreadLocal.isBatchProcess() != null ? BatchProcessThreadLocal
+        .isBatchProcess() : false;
+    Command createAndLinkCommand = this.getCommandChain(
+        CommandType.CreateAndLink, isBatch);
     createAndLinkCommand.execute(jpaContext);
     return (EntityResponse) jpaContext.getResponse();
   }
 
   @Override
-  public void deleteEntity(ODataContext context, String entitySetName, OEntityKey entityKey) {
-    JPAContext jpaContext = new JPAContext(metadata, entitySetName, entityKey, null);
+  public void deleteEntity(ODataContext context, String entitySetName,
+      OEntityKey entityKey) {
+    JPAContext jpaContext = new JPAContext(metadata, entitySetName,
+        entityKey, null);
+    Boolean isBatch = BatchProcessThreadLocal.isBatchProcess() != null ? BatchProcessThreadLocal
+        .isBatchProcess() : false;
+    Command deleteEntityCommand = this.getCommandChain(
+        CommandType.DeleteEntity, isBatch);
     deleteEntityCommand.execute(jpaContext);
   }
 
   @Override
-  public void mergeEntity(ODataContext context, String entitySetName, OEntity entity) {
+  public void mergeEntity(ODataContext context, String entitySetName,
+      OEntity entity) {
     JPAContext jpaContext = new JPAContext(metadata, entitySetName,
         entity.getEntityKey(), entity);
+    Boolean isBatch = BatchProcessThreadLocal.isBatchProcess() != null ? BatchProcessThreadLocal
+        .isBatchProcess() : false;
+    Command mergeEntityCommand = this.getCommandChain(
+        CommandType.MergeEntity, isBatch);
     mergeEntityCommand.execute(jpaContext);
   }
 
   @Override
-  public void updateEntity(ODataContext context, String entitySetName, OEntity entity) {
+  public void updateEntity(ODataContext context, String entitySetName,
+      OEntity entity) {
     JPAContext jpaContext = new JPAContext(metadata, entitySetName,
         entity.getEntityKey(), entity);
+    Boolean isBatch = BatchProcessThreadLocal.isBatchProcess() != null ? BatchProcessThreadLocal
+        .isBatchProcess() : false;
+    Command updateEntityCommand = this.getCommandChain(
+        CommandType.UpdateEntity, isBatch);
     updateEntityCommand.execute(jpaContext);
   }
 
   @Override
-  public EntityIdResponse getLinks(ODataContext context, OEntityId sourceEntity, String targetNavProp) {
+  public EntityIdResponse getLinks(ODataContext context,
+      OEntityId sourceEntity, String targetNavProp) {
     JPAContext jpaContext = new JPAContext(metadata,
-        sourceEntity.getEntitySetName(),
-        sourceEntity.getEntityKey(), targetNavProp, (QueryInfo) null);
+        sourceEntity.getEntitySetName(), sourceEntity.getEntityKey(),
+        targetNavProp, (QueryInfo) null);
     getLinksCommand.execute(jpaContext);
 
     BaseResponse r = jpaContext.getResponse();
@@ -361,43 +671,59 @@ public class JPAProducer implements ODataProducer {
   }
 
   @Override
-  public void createLink(ODataContext context, OEntityId sourceEntity, String targetNavProp, OEntityId targetEntity) {
+  public void createLink(ODataContext context, OEntityId sourceEntity,
+      String targetNavProp, OEntityId targetEntity) {
     throw new NotImplementedException();
   }
 
   @Override
-  public void updateLink(ODataContext context, OEntityId sourceEntity, String targetNavProp, OEntityKey oldTargetEntityKey, OEntityId newTargetEntity) {
+  public void updateLink(ODataContext context, OEntityId sourceEntity,
+      String targetNavProp, OEntityKey oldTargetEntityKey,
+      OEntityId newTargetEntity) {
     throw new NotImplementedException();
   }
 
   @Override
-  public void deleteLink(ODataContext context, OEntityId sourceEntity, String targetNavProp, OEntityKey targetEntityKey) {
+  public void deleteLink(ODataContext context, OEntityId sourceEntity,
+      String targetNavProp, OEntityKey targetEntityKey) {
     throw new NotImplementedException();
   }
 
   @Override
-  public BaseResponse callFunction(ODataContext context, EdmFunctionImport name,
-      Map<String, OFunctionParameter> params, QueryInfo queryInfo) {
+  public BaseResponse callFunction(ODataContext context,
+      EdmFunctionImport name, Map<String, OFunctionParameter> params,
+      QueryInfo queryInfo) {
+    if (functionCallback != null) {
+      return functionCallback.callFunction(context, name, params,
+          queryInfo);
+    }
     return null;
   }
 
   @Override
-  public CountResponse getEntitiesCount(ODataContext context, String entitySetName, QueryInfo queryInfo) {
-    JPAContext jpaContext = new JPAContext(metadata, entitySetName, queryInfo);
+  public CountResponse getEntitiesCount(ODataContext context,
+      String entitySetName, QueryInfo queryInfo) {
+    JPAContext jpaContext = new JPAContext(metadata, entitySetName,
+        queryInfo);
     getCountCommand.execute(jpaContext);
     return (CountResponse) jpaContext.getResponse();
   }
 
   @Override
-  public CountResponse getNavPropertyCount(ODataContext context, String entitySetName, OEntityKey entityKey, String navProp, QueryInfo queryInfo) {
-    JPAContext jpaContext = new JPAContext(metadata, entitySetName, entityKey,
-        navProp, queryInfo);
+  public CountResponse getNavPropertyCount(ODataContext context,
+      String entitySetName, OEntityKey entityKey, String navProp,
+      QueryInfo queryInfo) {
+    JPAContext jpaContext = new JPAContext(metadata, entitySetName,
+        entityKey, navProp, queryInfo);
     getCountCommand.execute(jpaContext);
     return (CountResponse) jpaContext.getResponse();
   }
 
   @Override
   public <TExtension extends OExtension<ODataProducer>> TExtension findExtension(Class<TExtension> clazz) {
+    if (clazz.equals(OMediaLinkExtension.class)) {
+      return (TExtension) new MediaLinkExtension(this);
+    }
     return null;
   }
 
@@ -473,17 +799,15 @@ public class JPAProducer implements ODataProducer {
     }
   }
 
-  static void setAttribute(Attribute<?, ?> att, OProperty<?> prop,
+  public static void setAttribute(Attribute<?, ?> att, OProperty<?> prop,
       Object target) {
     JPAMember attMember = JPAMember.create(att, target);
     Object value = coercePropertyValue(prop, attMember.getJavaType());
     attMember.set(value);
   }
 
-  static Object typeSafeEntityKey(
-      EntityManager em,
-      EntityType<?> jpaEntityType,
-      OEntityKey entityKey) {
+  static Object typeSafeEntityKey(EntityManager em,
+      EntityType<?> jpaEntityType, OEntityKey entityKey) {
 
     if (entityKey != null
         && jpaEntityType.getIdType().getPersistenceType() == PersistenceType.EMBEDDABLE) {
@@ -499,7 +823,9 @@ public class JPAProducer implements ODataProducer {
     Class<?> javaType = jpaEntityType.getIdType().getJavaType();
 
     try {
-      return TypeConverter.convert(entityKey == null ? null : entityKey.asSingleValue(), javaType);
+      return TypeConverter.convert(
+          entityKey == null ? null : entityKey.asSingleValue(),
+          javaType);
     } catch (UnsupportedOperationException e) {
       throw new BadRequestException("Invalid key type", e);
     } catch (IllegalArgumentException e) {
@@ -529,14 +855,15 @@ public class JPAProducer implements ODataProducer {
         boolean hasSingularBackRef = oneToMany != null
             && oneToMany.mappedBy() != null
             && !oneToMany.mappedBy().isEmpty();
-        boolean cascade = oneToMany != null && oneToMany.cascade() != null
-            ? Enumerable.create(oneToMany.cascade()).any(new Predicate1<CascadeType>() {
-              @Override
-              public boolean apply(CascadeType input) {
-                return input == CascadeType.ALL || input == CascadeType.PERSIST;
-              }
-            })
-            : false;
+        boolean cascade = oneToMany != null
+            && oneToMany.cascade() != null ? Enumerable.create(
+            oneToMany.cascade()).any(new Predicate1<CascadeType>() {
+          @Override
+          public boolean apply(CascadeType input) {
+            return input == CascadeType.ALL
+                || input == CascadeType.PERSIST;
+          }
+        }) : false;
 
         ManyToMany manyToMany = member.getAnnotation(ManyToMany.class);
 
@@ -605,14 +932,15 @@ public class JPAProducer implements ODataProducer {
         JPAMember member = JPAMember.create(att, jpaEntity);
 
         OneToOne oneToOne = member.getAnnotation(OneToOne.class);
-        boolean cascade = oneToOne != null && oneToOne.cascade() != null
-            ? Enumerable.create(oneToOne.cascade()).any(new Predicate1<CascadeType>() {
-              @Override
-              public boolean apply(CascadeType input) {
-                return input == CascadeType.ALL || input == CascadeType.PERSIST;
-              }
-            })
-            : false;
+        boolean cascade = oneToOne != null
+            && oneToOne.cascade() != null ? Enumerable.create(
+            oneToOne.cascade()).any(new Predicate1<CascadeType>() {
+          @Override
+          public boolean apply(CascadeType input) {
+            return input == CascadeType.ALL
+                || input == CascadeType.PERSIST;
+          }
+        }) : false;
 
         EntityType<?> relJpaEntityType = (EntityType<?>) att.getType();
         Object relJpaEntity = createNewJPAEntity(em, relJpaEntityType,
@@ -660,11 +988,8 @@ public class JPAProducer implements ODataProducer {
     }
   }
 
-  static Object createNewJPAEntity(
-      EntityManager em,
-      EntityType<?> jpaEntityType,
-      OEntity oEntity,
-      boolean withLinks) {
+  static Object createNewJPAEntity(EntityManager em,
+      EntityType<?> jpaEntityType, OEntity oEntity, boolean withLinks) {
 
     Object jpaEntity = newInstance(jpaEntityType.getJavaType());
 
@@ -695,6 +1020,69 @@ public class JPAProducer implements ODataProducer {
       return false;
     }
     return true;
+  }
+
+  @Override
+  public void beginChangeSetBoundary() {
+    JPAContext jpaContext = new JPAContext(metadata, null, null, null);
+    Command startChangeSetBoundary = this.getCommandChain(CommandType.StartChangeSetBoundary,
+        true);
+    startChangeSetBoundary.execute(jpaContext);
+  }
+
+  @Override
+  public void commitChangeSetBoundary() {
+    JPAContext jpaContext = new JPAContext(metadata, null, null, null);
+    Command commitChangeSetBoundary = this.getCommandChain(CommandType.CommitChangeSetBoundary,
+        true);
+    commitChangeSetBoundary.execute(jpaContext);
+  }
+
+  @Override
+  public void rollbackChangeSetBoundary() {
+    JPAContext jpaContext = new JPAContext(metadata, null, null, null);
+    Command rollbackChangeSetBoundary = this.getCommandChain(CommandType.RollbackChangeSetBoundary,
+        true);
+    rollbackChangeSetBoundary.execute(jpaContext);
+  }
+
+  @Override
+  public EntityResponse createResponseForBatchPostOperation(
+      String entitySetName, OEntity entity) {
+    JPAContext jpaContext = new JPAContext(metadata, entitySetName, null,
+        entity);
+    Command createResponseForBatchCommand = this.getCommandChain(
+        CommandType.CreateResponseForBatch, true);
+    createResponseForBatchCommand.execute(jpaContext);
+
+    return (EntityResponse) jpaContext.getResponse();
+  }
+
+  @Override
+  public InputStream getInputStreamForMediaLink(String entitySetName,
+      OEntityKey entityKey, EntityQueryInfo queryInfo) {
+    JPAContext jpaContext = new JPAContext(metadata, entitySetName,
+        entityKey, null, queryInfo);
+    getStreamCommand.execute(jpaContext);
+    return jpaContext.getContextStream().getInputStream();
+  }
+
+  @Override
+  public void updateEntityWithStream(String entitySetName, OEntity entity) {
+    JPAContext jpaContext = new JPAContext(metadata, entitySetName,
+        entity.getEntityKey(), entity);
+    Boolean isBatch = BatchProcessThreadLocal.isBatchProcess() != null ? BatchProcessThreadLocal
+        .isBatchProcess() : false;
+    Command updateStreamCommand = this.getCommandChain(
+        CommandType.UpdateStream, isBatch);
+    updateStreamCommand.execute(jpaContext);
+  }
+
+  public interface ODataFunctionCallback {
+    public BaseResponse callFunction(ODataContext context,
+        EdmFunctionImport name, Map<String, OFunctionParameter> params,
+        QueryInfo queryInfo);
+
   }
 
 }

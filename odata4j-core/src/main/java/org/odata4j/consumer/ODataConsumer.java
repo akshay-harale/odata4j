@@ -3,6 +3,8 @@ package org.odata4j.consumer;
 import org.core4j.Enumerable;
 import org.odata4j.consumer.behaviors.OClientBehavior;
 import org.odata4j.core.EntitySetInfo;
+import org.odata4j.core.OBatchRequest;
+import org.odata4j.core.OChangeSetRequest;
 import org.odata4j.core.OCountRequest;
 import org.odata4j.core.OCreateRequest;
 import org.odata4j.core.OEntity;
@@ -12,6 +14,7 @@ import org.odata4j.core.OEntityId;
 import org.odata4j.core.OEntityKey;
 import org.odata4j.core.OEntityRequest;
 import org.odata4j.core.OFunctionRequest;
+import org.odata4j.core.OModifyLinkRequest;
 import org.odata4j.core.OModifyRequest;
 import org.odata4j.core.OObject;
 import org.odata4j.core.OQueryRequest;
@@ -291,7 +294,7 @@ public interface ODataConsumer {
    * @param targetEntity  the entity to use as the target of the relationship
    * @return a request builder
    */
-  OEntityRequest<Void> createLink(OEntityId sourceEntity, String targetNavProp, OEntityId targetEntity);
+  OModifyLinkRequest createLink(OEntityId sourceEntity, String targetNavProp, OEntityId targetEntity);
 
   /**
    * Deletes related entity links between two entities by navigation property.
@@ -303,7 +306,7 @@ public interface ODataConsumer {
    * @param targetKeyValues  the target entity-key, applicable if the navigation property represents a collection
    * @return a request builder
    */
-  OEntityRequest<Void> deleteLink(OEntityId sourceEntity, String targetNavProp, Object... targetKeyValues);
+  OModifyLinkRequest deleteLink(OEntityId sourceEntity, String targetNavProp, Object... targetKeyValues);
 
   /**
    * Updates related entity links between two entities by navigation property.
@@ -316,7 +319,7 @@ public interface ODataConsumer {
    * @param oldTargetKeyValues  the target entity-key, applicable if the navigation property represents a collection
    * @return a request builder
    */
-  OEntityRequest<Void> updateLink(OEntityId sourceEntity, OEntityId newTargetEntity, String targetNavProp, Object... oldTargetKeyValues);
+  OModifyLinkRequest updateLink(OEntityId sourceEntity, OEntityId newTargetEntity, String targetNavProp, Object... oldTargetKeyValues);
 
   /**
    * Creates a new entity in the given entity-set.
@@ -419,4 +422,18 @@ public interface ODataConsumer {
    * @return a new count-request builder
    */
   OCountRequest getEntitiesCount(String entitySetName);
+
+  /**
+   * Returns a batch request, which can be sent to the server in one request.
+   * @return a new OBatchRequest builder.
+   */
+  OBatchRequest batchRequest();
+
+  /**
+   * Returns a change set request, which can be added into batch request.
+   * All the operation within the change set will be under one transaction.
+   * Only CUD requests are allowed inside change set request. 
+   * @return a new change set request builder.
+   */
+  OChangeSetRequest changeSetRequest();
 }
